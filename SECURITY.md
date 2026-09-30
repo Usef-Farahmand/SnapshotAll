@@ -18,8 +18,8 @@ You can expect an initial response within about 7 days. If the report is confirm
 
 ## Scope notes
 
-SnapshotAll runs a local browser and (in APK mode) installs and taps through apps on a device you connect. Please keep in mind:
+SnapshotAll runs a local browser, installs and taps through Android apps on a device you connect, launches and clicks through Windows apps, and reads the files of folders you choose. Please keep in mind:
 
-- Only test targets you own or have permission to test.
+- Only test targets you own or have permission to test. App modes click real buttons — use a test account or an emulator, and keep the default *never tap* list.
 - Session files (`--storage-state`) contain login cookies. Treat them like passwords and never commit or share them.
 - Screenshots may contain sensitive data from the pages or apps you capture. Store and share them carefully.

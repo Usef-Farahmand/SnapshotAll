@@ -14,8 +14,9 @@ body:
       options:
         - Website (online)
         - Website (local / localhost)
-        - Local folder or HTML file
         - Android APK
+        - Windows app (EXE / JAR / attach)
+        - Folder
     validations:
       required: true
   - type: textarea

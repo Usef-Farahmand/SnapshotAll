@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""SnapshotAll - desktop GUI (website / APK screenshot tool)"""
+"""SnapshotAll - desktop GUI: screenshots of websites, apps (APK / EXE) and folders."""
 import os
 import sys
 from pathlib import Path
@@ -19,12 +19,92 @@ import threading
 import traceback
 import tkinter as tk
 from datetime import datetime
-from pathlib import Path
-from tkinter import filedialog, messagebox, scrolledtext, ttk
+from tkinter import filedialog, messagebox, ttk
 
 import snapshot_all as sa
+import snapshot_desktop as sd
+import snapshot_folder as sf
 
-APP_TITLE = "SnapshotAll - Website & App Screenshot Tool"
+APP_NAME = "SnapshotAll"
+APP_TITLE = "SnapshotAll - Screenshot Every Page, Screen & File"
+
+# ── Dark + orange theme ─────────────────────────────────────────────
+BG = "#14100D"
+PANEL = "#1C1612"
+FIELD = "#261E18"
+FIELD_H = "#33281F"
+BORDER = "#3B2F25"
+FG = "#F4EDE6"
+MUTED = "#A99B8E"
+ORANGE = "#F97316"
+ORANGE_H = "#FB923C"
+ON_ORANGE = "#1A0E05"
+LOG_BG = "#0F0C0A"
+LOG_FG = "#EADFD3"
+
+
+def asset(name):
+    base = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
+    return base / "assets" / name
+
+
+def apply_theme(root):
+    s = ttk.Style(root)
+    s.theme_use("clam")
+    root.configure(bg=BG)
+    s.configure(".", background=BG, foreground=FG, fieldbackground=FIELD, bordercolor=BORDER,
+                lightcolor=BORDER, darkcolor=BORDER, troughcolor=PANEL, focuscolor=ORANGE,
+                font=("Segoe UI", 10))
+    for suffix, bg in (("", BG), ("Panel.", PANEL)):
+        s.configure(f"{suffix}TFrame", background=bg)
+        s.configure(f"{suffix}TLabel", background=bg, foreground=FG)
+        s.configure(f"{suffix}Muted.TLabel", background=bg, foreground=MUTED, font=("Segoe UI", 9))
+        s.configure(f"{suffix}Section.TLabel", background=bg, foreground=ORANGE, font=("Segoe UI", 10, "bold"))
+        s.configure(f"{suffix}TCheckbutton", background=bg, foreground=FG, indicatorbackground=FIELD,
+                    indicatorforeground=ORANGE)
+        s.map(f"{suffix}TCheckbutton", background=[("active", bg)],
+              indicatorbackground=[("selected", ORANGE), ("!selected", FIELD)],
+              indicatorforeground=[("selected", ON_ORANGE)])
+    s.configure("Title.TLabel", font=("Segoe UI", 22, "bold"), foreground=ORANGE)
+    s.configure("Sub.TLabel", foreground=MUTED, font=("Segoe UI", 10))
+
+    s.configure("TEntry", fieldbackground=FIELD, foreground=FG, insertcolor=FG, bordercolor=BORDER, padding=6)
+    s.map("TEntry", bordercolor=[("focus", ORANGE)], lightcolor=[("focus", ORANGE)],
+          darkcolor=[("focus", ORANGE)])
+
+    s.configure("TButton", background=FIELD, foreground=FG, bordercolor=BORDER, padding=(12, 6), relief="flat")
+    s.map("TButton", background=[("active", FIELD_H), ("disabled", PANEL)],
+          foreground=[("disabled", "#6E6259")], bordercolor=[("active", ORANGE)])
+    s.configure("Accent.TButton", background=ORANGE, foreground=ON_ORANGE, bordercolor=ORANGE,
+                font=("Segoe UI", 10, "bold"), padding=(20, 7))
+    s.map("Accent.TButton", background=[("active", ORANGE_H), ("disabled", "#5A3A1E")],
+          foreground=[("disabled", "#2A1A0C")], bordercolor=[("active", ORANGE_H)])
+
+    s.configure("TNotebook", background=BG, borderwidth=0, bordercolor=BORDER, lightcolor=BG, darkcolor=BG,
+                tabmargins=(0, 0, 0, 0))
+    s.configure("TNotebook.Tab", background=BG, foreground=MUTED, padding=(22, 9), borderwidth=0,
+                bordercolor=BG, lightcolor=BG, darkcolor=BG, font=("Segoe UI", 10, "bold"))
+    s.map("TNotebook.Tab", background=[("selected", PANEL), ("active", FIELD)],
+          foreground=[("selected", ORANGE), ("active", FG)],
+          bordercolor=[("selected", PANEL)], lightcolor=[("selected", PANEL)], darkcolor=[("selected", PANEL)])
+
+    s.configure("Orange.Horizontal.TProgressbar", troughcolor=PANEL, background=ORANGE, bordercolor=PANEL,
+                lightcolor=ORANGE, darkcolor=ORANGE, thickness=6)
+    s.configure("Vertical.TScrollbar", background=FIELD, troughcolor=LOG_BG, bordercolor=LOG_BG,
+                arrowcolor=MUTED, lightcolor=FIELD, darkcolor=FIELD)
+    s.map("Vertical.TScrollbar", background=[("active", ORANGE)])
+
+
+def dark_titlebar(win):
+    """Ask Windows 10/11 for a dark title bar (ignored elsewhere)."""
+    try:
+        import ctypes
+        win.update()
+        hwnd = ctypes.windll.user32.GetParent(win.winfo_id())
+        for attr in (20, 19):  # DWMWA_USE_IMMERSIVE_DARK_MODE (new / old id)
+            ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, attr, ctypes.byref(ctypes.c_int(1)), 4)
+    except Exception:
+        pass
 
 
 def add_edit_support(w):
@@ -57,7 +137,8 @@ def add_edit_support(w):
                 select_all()
                 return "break"
 
-    menu = tk.Menu(w, tearoff=0)
+    menu = tk.Menu(w, tearoff=0, bg=FIELD, fg=FG, activebackground=ORANGE, activeforeground=ON_ORANGE,
+                   bd=0, relief="flat")
     menu.add_command(label="Paste", command=lambda: is_editable() and w.event_generate("<<Paste>>"))
     menu.add_command(label="Copy", command=lambda: w.event_generate("<<Copy>>"))
     menu.add_command(label="Cut", command=lambda: is_editable() and w.event_generate("<<Cut>>"))
@@ -85,44 +166,77 @@ class App(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title(APP_TITLE)
-        self.geometry("780x680")
+        self.geometry("920x900")
+        self.minsize(820, 720)
+        apply_theme(self)
+        self._set_icon()
+
         self.q = queue.Queue()
         self.thread = None
         self.last_out = None
         self.buf = []
 
-        pad = {"padx": 8, "pady": 4}
-        frm = ttk.Frame(self)
-        frm.pack(fill="x", **pad)
-        frm.columnconfigure(1, weight=1)
+        self._build_header()
+        self._build_tabs()
+        self._build_run_area()
+        dark_titlebar(self)
+        self.after(100, self.poll)
 
-        # target
-        ttk.Label(frm, text="Website URL / folder / APK file:").grid(row=0, column=0, sticky="w")
-        self.target = tk.StringVar()
-        te = ttk.Entry(frm, textvariable=self.target)
-        te.grid(row=0, column=1, sticky="ew", **pad)
-        add_edit_support(te)
-        bf = ttk.Frame(frm)
-        bf.grid(row=0, column=2)
-        ttk.Button(bf, text="Paste", width=7, command=self.paste_target).pack(side="left", padx=(0, 6))
-        ttk.Button(bf, text="APK…", width=6, command=self.pick_apk).pack(side="left")
-        ttk.Button(bf, text="Folder…", width=7, command=self.pick_dir).pack(side="left", padx=2)
-        ttk.Button(bf, text="HTML…", width=6, command=self.pick_html).pack(side="left")
+    # ───────────── UI construction ─────────────
+    def _set_icon(self):
+        try:
+            self.icon_img = tk.PhotoImage(file=str(asset("logo_64.png")))
+            self.iconphoto(True, self.icon_img)
+            if sys.platform == "win32":
+                self.iconbitmap(default=str(asset("icon.ico")))
+        except Exception:
+            self.icon_img = None
 
-        # output
-        ttk.Label(frm, text="Output folder:").grid(row=1, column=0, sticky="w")
-        self.out = tk.StringVar(value=str(Path.home() / "SnapshotAll_Output"))
-        oe = ttk.Entry(frm, textvariable=self.out)
-        oe.grid(row=1, column=1, sticky="ew", **pad)
-        add_edit_support(oe)
-        ttk.Button(frm, text="Browse…", command=self.pick_out).grid(row=1, column=2)
+    def _build_header(self):
+        head = ttk.Frame(self)
+        head.pack(fill="x", padx=18, pady=(14, 8))
+        if self.icon_img:
+            ttk.Label(head, image=self.icon_img).pack(side="left", padx=(0, 12))
+        box = ttk.Frame(head)
+        box.pack(side="left")
+        ttk.Label(box, text=APP_NAME, style="Title.TLabel").pack(anchor="w")
+        ttk.Label(box, text="Screenshot every page, screen and file — websites, apps and folders",
+                  style="Sub.TLabel").pack(anchor="w")
 
-        # settings
-        nb = ttk.Notebook(self)
-        nb.pack(fill="x", **pad)
+    def _entry_row(self, parent, r, label, var, width=None, span=1):
+        ttk.Label(parent, text=label, style="Panel.TLabel").grid(row=r, column=0, sticky="w", padx=(4, 12), pady=5)
+        e = ttk.Entry(parent, textvariable=var, width=width or 12)
+        e.grid(row=r, column=1, sticky="w" if width else "ew", pady=5, columnspan=span)
+        add_edit_support(e)
+        return e
 
-        web = ttk.Frame(nb)
-        nb.add(web, text="Website settings")
+    def _target_row(self, parent, label, var, buttons):
+        """Big input row: label, entry, action buttons."""
+        ttk.Label(parent, text=label, style="Panel.Section.TLabel").grid(row=0, column=0, columnspan=3, sticky="w",
+                                                                        padx=4, pady=(4, 4))
+        e = ttk.Entry(parent, textvariable=var, font=("Segoe UI", 11))
+        e.grid(row=1, column=0, columnspan=2, sticky="ew", padx=4, pady=(0, 2), ipady=3)
+        add_edit_support(e)
+        bar = ttk.Frame(parent, style="Panel.TFrame")
+        bar.grid(row=1, column=2, sticky="e", padx=(8, 4))
+        for text, cmd in buttons:
+            ttk.Button(bar, text=text, command=cmd).pack(side="left", padx=(0, 6))
+        parent.columnconfigure(1, weight=1)
+
+    def _build_tabs(self):
+        self.nb = ttk.Notebook(self)
+        self.nb.pack(fill="x", padx=18)
+
+        # ── Website tab ──
+        web = ttk.Frame(self.nb, style="Panel.TFrame", padding=16)
+        self.nb.add(web, text="  Website  ")
+        self.web_target = tk.StringVar()
+        self._target_row(web, "Website address (online or local)", self.web_target,
+                         [("Paste", lambda: self.paste_into(self.web_target))])
+        ttk.Label(web, text="Any public site or a local dev server, e.g.  https://example.com   or   http://localhost:3000",
+                  style="Panel.Muted.TLabel").grid(row=2, column=0, columnspan=3, sticky="w", padx=4, pady=(0, 10))
+        opt = ttk.Frame(web, style="Panel.TFrame")
+        opt.grid(row=3, column=0, columnspan=3, sticky="ew")
         self.max_pages = tk.IntVar(value=50)
         self.depth_web = tk.IntVar(value=5)
         self.width = tk.IntVar(value=1440)
@@ -130,62 +244,145 @@ class App(tk.Tk):
         self.delay_web = tk.DoubleVar(value=1.0)
         self.mobile = tk.BooleanVar(value=False)
         self.state_file = tk.StringVar()
-        self._row(web, 0, "Max pages", self.max_pages)
-        self._row(web, 1, "Crawl depth", self.depth_web)
-        self._row(web, 2, "Window width", self.width)
-        self._row(web, 3, "Window height", self.height)
-        self._row(web, 4, "Delay per page (seconds)", self.delay_web)
-        ttk.Checkbutton(web, text="Mobile mode (iPhone 13)", variable=self.mobile).grid(
-            row=5, column=0, columnspan=2, sticky="w", **pad)
-        ttk.Label(web, text="Session file (pages behind login):").grid(row=6, column=0, sticky="w", **pad)
-        se = ttk.Entry(web, textvariable=self.state_file, width=30)
-        se.grid(row=6, column=1, **pad)
+        left = ttk.Frame(opt, style="Panel.TFrame")
+        left.pack(side="left", anchor="n", padx=(0, 40))
+        self._entry_row(left, 0, "Max pages", self.max_pages)
+        self._entry_row(left, 1, "Crawl depth", self.depth_web)
+        self._entry_row(left, 2, "Delay per page (s)", self.delay_web)
+        right = ttk.Frame(opt, style="Panel.TFrame")
+        right.pack(side="left", anchor="n", fill="x", expand=True)
+        right.columnconfigure(1, weight=1)
+        self._entry_row(right, 0, "Window width", self.width)
+        self._entry_row(right, 1, "Window height", self.height)
+        ttk.Checkbutton(right, text="Mobile mode (iPhone 13)", variable=self.mobile,
+                        style="Panel.TCheckbutton").grid(row=2, column=0, columnspan=2, sticky="w", padx=4, pady=5)
+        sess = ttk.Frame(web, style="Panel.TFrame")
+        sess.grid(row=4, column=0, columnspan=3, sticky="ew", pady=(6, 0))
+        sess.columnconfigure(1, weight=1)
+        ttk.Label(sess, text="Session file (pages behind login)", style="Panel.TLabel").grid(
+            row=0, column=0, sticky="w", padx=(4, 12))
+        se = ttk.Entry(sess, textvariable=self.state_file)
+        se.grid(row=0, column=1, sticky="ew")
         add_edit_support(se)
+        ttk.Button(sess, text="Browse…", command=self.pick_session).grid(row=0, column=2, padx=(6, 4))
 
-        apk = ttk.Frame(nb)
-        nb.add(apk, text="APK settings")
+        # ── App tab ──
+        app = ttk.Frame(self.nb, style="Panel.TFrame", padding=16)
+        self.nb.add(app, text="  App (APK / EXE)  ")
+        self.app_target = tk.StringVar()
+        self._target_row(app, "App file", self.app_target,
+                         [("Paste", lambda: self.paste_into(self.app_target)), ("Browse…", self.pick_app)])
+        ttk.Label(app, text="Android .apk  ·  Windows .exe / .jar  ·  or attach to a window that is already running (below)",
+                  style="Panel.Muted.TLabel").grid(row=2, column=0, columnspan=3, sticky="w", padx=4, pady=(0, 10))
         self.max_screens = tk.IntVar(value=40)
-        self.depth_apk = tk.IntVar(value=3)
+        self.depth_app = tk.IntVar(value=3)
         self.max_clicks = tk.IntVar(value=25)
+        self.delay_app = tk.DoubleVar(value=1.0)
         self.scroll = tk.IntVar(value=3)
-        self.delay_apk = tk.DoubleVar(value=1.0)
         self.serial = tk.StringVar()
         self.package = tk.StringVar()
+        self.attach = tk.StringVar()
         self.avoid = tk.StringVar(value=sa.DEFAULT_AVOID)
-        self._row(apk, 0, "Max screens", self.max_screens)
-        self._row(apk, 1, "Crawl depth", self.depth_apk)
-        self._row(apk, 2, "Max taps per screen", self.max_clicks)
-        self._row(apk, 3, "Scroll steps (0 = off)", self.scroll)
-        self._row(apk, 4, "Delay per tap (seconds)", self.delay_apk)
-        self._row(apk, 5, "Device serial (optional)", self.serial, 22)
-        self._row(apk, 6, "Package name (optional)", self.package, 22)
-        self._row(apk, 7, "Never tap (regex)", self.avoid, 46)
+        cols = ttk.Frame(app, style="Panel.TFrame")
+        cols.grid(row=3, column=0, columnspan=3, sticky="ew")
+        c1 = ttk.Frame(cols, style="Panel.TFrame")
+        c1.pack(side="left", anchor="n", padx=(0, 36))
+        ttk.Label(c1, text="Common", style="Panel.Section.TLabel").grid(row=0, column=0, sticky="w", padx=4)
+        self._entry_row(c1, 1, "Max screens", self.max_screens)
+        self._entry_row(c1, 2, "Crawl depth", self.depth_app)
+        self._entry_row(c1, 3, "Max taps per screen", self.max_clicks)
+        self._entry_row(c1, 4, "Delay per tap (s)", self.delay_app)
+        c2 = ttk.Frame(cols, style="Panel.TFrame")
+        c2.pack(side="left", anchor="n")
+        ttk.Label(c2, text="Android only", style="Panel.Section.TLabel").grid(row=0, column=0, sticky="w", padx=4)
+        self._entry_row(c2, 1, "Scroll steps (0 = off)", self.scroll)
+        self._entry_row(c2, 2, "Device serial", self.serial, 16)
+        self._entry_row(c2, 3, "Package name", self.package, 16)
+        win = ttk.Frame(app, style="Panel.TFrame")
+        win.grid(row=4, column=0, columnspan=3, sticky="ew", pady=(10, 0))
+        win.columnconfigure(1, weight=1)
+        ttk.Label(win, text="Windows only", style="Panel.Section.TLabel").grid(
+            row=0, column=0, columnspan=2, sticky="w", padx=4)
+        ttk.Label(win, text="Attach to running window (title regex)", style="Panel.TLabel").grid(
+            row=1, column=0, sticky="w", padx=(4, 12), pady=5)
+        ae = ttk.Entry(win, textvariable=self.attach)
+        ae.grid(row=1, column=1, sticky="ew", padx=(0, 4))
+        add_edit_support(ae)
+        ttk.Label(win, text="Leave the app file empty to attach instead of launching.",
+                  style="Panel.Muted.TLabel").grid(row=2, column=1, sticky="w", pady=(0, 2))
+        av = ttk.Frame(app, style="Panel.TFrame")
+        av.grid(row=5, column=0, columnspan=3, sticky="ew", pady=(6, 0))
+        av.columnconfigure(1, weight=1)
+        ttk.Label(av, text="Never tap / click (regex)", style="Panel.TLabel").grid(row=0, column=0, sticky="w", padx=(4, 12))
+        avoid_e = ttk.Entry(av, textvariable=self.avoid)
+        avoid_e.grid(row=0, column=1, sticky="ew", padx=(0, 4))
+        add_edit_support(avoid_e)
 
-        # buttons
-        bar = ttk.Frame(self)
-        bar.pack(fill="x", **pad)
-        self.start_btn = ttk.Button(bar, text="▶ Start", command=self.start)
+        # ── Folder tab ──
+        fol = ttk.Frame(self.nb, style="Panel.TFrame", padding=16)
+        self.nb.add(fol, text="  Folder  ")
+        self.folder_target = tk.StringVar()
+        self._target_row(fol, "Folder", self.folder_target,
+                         [("Paste", lambda: self.paste_into(self.folder_target)), ("Choose…", self.pick_folder)])
+        ttk.Label(fol, text="Renders the content of every file — images, PDFs, text & code, Word / PowerPoint / Excel, "
+                            "archives.\nNothing is opened in a browser or in another program.",
+                  style="Panel.Muted.TLabel", justify="left").grid(row=2, column=0, columnspan=3, sticky="w", padx=4,
+                                                                   pady=(0, 10))
+        self.recursive = tk.BooleanVar(value=True)
+        self.max_files = tk.IntVar(value=500)
+        self.pdf_pages = tk.IntVar(value=10)
+        self.text_pages = tk.IntVar(value=3)
+        fo = ttk.Frame(fol, style="Panel.TFrame")
+        fo.grid(row=3, column=0, columnspan=3, sticky="w")
+        ttk.Checkbutton(fo, text="Include subfolders", variable=self.recursive, style="Panel.TCheckbutton").grid(
+            row=0, column=0, columnspan=2, sticky="w", padx=4, pady=5)
+        self._entry_row(fo, 1, "Max files", self.max_files)
+        self._entry_row(fo, 2, "Max pages per PDF", self.pdf_pages)
+        self._entry_row(fo, 3, "Max images per text/code file", self.text_pages)
+
+    def _build_run_area(self):
+        wrap = ttk.Frame(self)
+        wrap.pack(fill="both", expand=True, padx=18, pady=(12, 14))
+
+        out_row = ttk.Frame(wrap)
+        out_row.pack(fill="x")
+        out_row.columnconfigure(1, weight=1)
+        ttk.Label(out_row, text="Output folder").grid(row=0, column=0, sticky="w", padx=(0, 12))
+        self.out = tk.StringVar(value=str(Path.home() / "SnapshotAll_Output"))
+        oe = ttk.Entry(out_row, textvariable=self.out)
+        oe.grid(row=0, column=1, sticky="ew")
+        add_edit_support(oe)
+        ttk.Button(out_row, text="Browse…", command=self.pick_out).grid(row=0, column=2, padx=(6, 0))
+
+        bar = ttk.Frame(wrap)
+        bar.pack(fill="x", pady=(12, 8))
+        self.start_btn = ttk.Button(bar, text="▶  Start", style="Accent.TButton", command=self.start)
         self.start_btn.pack(side="left")
-        self.stop_btn = ttk.Button(bar, text="■ Stop", command=self.stop, state="disabled")
-        self.stop_btn.pack(side="left", padx=6)
+        self.stop_btn = ttk.Button(bar, text="■  Stop", command=self.stop, state="disabled")
+        self.stop_btn.pack(side="left", padx=8)
         self.open_btn = ttk.Button(bar, text="Open output folder", command=self.open_out, state="disabled")
         self.open_btn.pack(side="right")
-        ttk.Button(bar, text="Copy log", command=self.copy_log).pack(side="right", padx=6)
+        ttk.Button(bar, text="Copy log", command=self.copy_log).pack(side="right", padx=8)
 
-        self.log = scrolledtext.ScrolledText(self, height=14, state="disabled")
-        self.log.pack(fill="both", expand=True, **pad)
+        self.progress = ttk.Progressbar(wrap, mode="determinate", value=0, style="Orange.Horizontal.TProgressbar")
+        self.progress.pack(fill="x", pady=(0, 8))
+
+        logf = ttk.Frame(wrap)
+        logf.pack(fill="both", expand=True)
+        self.log = tk.Text(logf, height=10, state="disabled", bg=LOG_BG, fg=LOG_FG, insertbackground=ORANGE,
+                           selectbackground=ORANGE, selectforeground=ON_ORANGE, relief="flat", bd=0, padx=10,
+                           pady=8, font=("Consolas", 10), wrap="word", highlightthickness=1,
+                           highlightbackground=BORDER, highlightcolor=BORDER)
+        sb = ttk.Scrollbar(logf, orient="vertical", command=self.log.yview)
+        self.log.configure(yscrollcommand=sb.set)
+        sb.pack(side="right", fill="y")
+        self.log.pack(side="left", fill="both", expand=True)
         add_edit_support(self.log)
-        self.after(100, self.poll)
 
-    def _row(self, parent, r, label, var, width=10):
-        ttk.Label(parent, text=label).grid(row=r, column=0, sticky="w", padx=8, pady=3)
-        e = ttk.Entry(parent, textvariable=var, width=width)
-        e.grid(row=r, column=1, sticky="w", padx=8, pady=3)
-        add_edit_support(e)
-
-    def paste_target(self):
+    # ───────────── helpers ─────────────
+    def paste_into(self, var):
         try:
-            self.target.set(self.clipboard_get().strip().strip('"'))
+            var.set(self.clipboard_get().strip().strip('"'))
         except tk.TclError:
             messagebox.showinfo("Clipboard", "The clipboard is empty.")
 
@@ -194,58 +391,93 @@ class App(tk.Tk):
         self.clipboard_append("".join(self.buf))
         self.append("\n(Log copied to clipboard)\n")
 
-    def pick_apk(self):
-        f = filedialog.askopenfilename(filetypes=[("Android APK", "*.apk")])
+    def pick_app(self):
+        f = filedialog.askopenfilename(filetypes=[("Apps", "*.apk *.exe *.jar"), ("Android APK", "*.apk"),
+                                                  ("Windows app", "*.exe"), ("Java app", "*.jar")])
         if f:
-            self.target.set(f)
+            self.app_target.set(f)
 
-    def pick_dir(self):
+    def pick_folder(self):
         f = filedialog.askdirectory()
         if f:
-            self.target.set(f)
+            self.folder_target.set(f)
 
-    def pick_html(self):
-        f = filedialog.askopenfilename(filetypes=[("HTML", "*.html *.htm")])
+    def pick_session(self):
+        f = filedialog.askopenfilename(filetypes=[("Session JSON", "*.json"), ("All files", "*.*")])
         if f:
-            self.target.set(f)
+            self.state_file.set(f)
 
     def pick_out(self):
         f = filedialog.askdirectory()
         if f:
             self.out.set(f)
 
+    def _resolve_job(self):
+        """Return (mode, target, label) for the active tab, or None after showing a warning."""
+        tab = self.nb.index(self.nb.select())
+        if tab == 0:
+            t = self.web_target.get().strip()
+            if not t:
+                messagebox.showwarning("Missing input", "Enter a website address first.")
+                return None
+            return "web", t, t
+        if tab == 1:
+            t = self.app_target.get().strip().strip('"')
+            att = self.attach.get().strip()
+            low = t.lower()
+            if low.endswith(".apk"):
+                return "apk", t, Path(t).stem
+            if low.endswith((".exe", ".jar")):
+                return "desktop", t, Path(t).stem
+            if not t and att:
+                return "desktop", "", att
+            if not t:
+                messagebox.showwarning("Missing input", "Choose an .apk / .exe / .jar file, or enter a window title "
+                                                        "to attach to.")
+            else:
+                messagebox.showwarning("Unsupported file", "Supported app files: .apk, .exe, .jar.")
+            return None
+        t = self.folder_target.get().strip().strip('"')
+        if not t or not Path(t).exists():
+            messagebox.showwarning("Missing input", "Choose an existing folder first.")
+            return None
+        return "folder", t, Path(t).name
+
+    # ───────────── run ─────────────
     def start(self):
-        target = self.target.get().strip().strip('"')
-        if not target:
-            messagebox.showwarning("Missing input", "Enter a website URL, or choose a folder / HTML / APK file.")
+        job = self._resolve_job()
+        if not job:
             return
-        is_apk = target.lower().endswith(".apk")
-        base = Path(self.out.get())
-        name = sa.slugify(Path(target).stem if is_apk else target, 30)
-        out = base / f"{name}_{datetime.now():%Y%m%d_%H%M%S}"
+        mode, target, label = job
+        out = Path(self.out.get()) / f"{sa.slugify(label, 30)}_{datetime.now():%Y%m%d_%H%M%S}"
         out.mkdir(parents=True, exist_ok=True)
         self.last_out = out
 
+        is_web = mode == "web"
         ns = argparse.Namespace(
-            max_depth=self.depth_apk.get() if is_apk else self.depth_web.get(),
-            delay=self.delay_apk.get() if is_apk else self.delay_web.get(),
+            max_depth=self.depth_web.get() if is_web else self.depth_app.get(),
+            delay=self.delay_web.get() if is_web else self.delay_app.get(),
             max_pages=self.max_pages.get(), width=self.width.get(), height=self.height.get(),
             mobile=self.mobile.get(), storage_state=self.state_file.get().strip() or None,
-            max_screens=self.max_screens.get(), max_clicks=self.max_clicks.get(),
-            scroll=self.scroll.get(), serial=self.serial.get().strip() or None,
-            package=self.package.get().strip() or None, avoid=self.avoid.get().strip(),
+            max_screens=self.max_screens.get(), max_clicks=self.max_clicks.get(), scroll=self.scroll.get(),
+            serial=self.serial.get().strip() or None, package=self.package.get().strip() or None,
+            avoid=self.avoid.get().strip(), attach=self.attach.get().strip() or None,
+            recursive=self.recursive.get(), max_files=self.max_files.get(),
+            pdf_pages=self.pdf_pages.get(), text_pages=self.text_pages.get(),
         )
+        runner = {"web": sa.run_web, "apk": sa.run_apk, "desktop": sd.run_desktop, "folder": sf.run_folder}[mode]
 
         self.clear_log()
         self.buf.clear()
         self.start_btn.config(state="disabled")
         self.stop_btn.config(state="normal")
         self.open_btn.config(state="disabled")
+        self.progress.configure(mode="indeterminate")
+        self.progress.start(12)
         sa.STOP.clear()
 
         def worker():
             sys.stdout = sys.stderr = QWriter(self.q, self.buf)
-            runner = sa.run_apk if is_apk else sa.run_web
             try:
                 try:
                     runner(target, out, ns)
@@ -271,7 +503,7 @@ class App(tk.Tk):
 
     def stop(self):
         sa.STOP.set()
-        self.append("\nStopping… (after the current page finishes)\n")
+        self.append("\nStopping… (after the current item finishes)\n")
 
     def open_out(self):
         if self.last_out and self.last_out.exists():
@@ -296,6 +528,8 @@ class App(tk.Tk):
             while True:
                 item = self.q.get_nowait()
                 if item is None:
+                    self.progress.stop()
+                    self.progress.configure(mode="determinate", value=0)
                     self.start_btn.config(state="normal")
                     self.stop_btn.config(state="disabled")
                     self.open_btn.config(state="normal")

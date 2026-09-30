@@ -1,11 +1,14 @@
 [Setup]
 AppName=SnapshotAll
-AppVersion=1.0
+AppVersion=1.1
 AppPublisher=Usef Farahmand
 DefaultDirName={autopf}\SnapshotAll
 DefaultGroupName=SnapshotAll
 OutputDir=Output
 OutputBaseFilename=SnapshotAll_Setup
+SetupIconFile=assets\icon.ico
+UninstallDisplayIcon={app}\SnapshotAll.exe
+WizardStyle=modern
 Compression=lzma2
 SolidCompression=yes
 PrivilegesRequired=lowest

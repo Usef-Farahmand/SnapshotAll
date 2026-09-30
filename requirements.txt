@@ -1,2 +1,5 @@
-playwright
-uiautomator2
+playwright>=1.44
+uiautomator2>=3.0
+pillow>=10.1
+pymupdf>=1.24
+pywinauto>=0.6.8; sys_platform == "win32"

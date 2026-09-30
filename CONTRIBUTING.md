@@ -25,11 +25,23 @@ python -m venv .venv
 pip install -r requirements.txt
 python snapshot_gui.py                 # GUI
 python snapshot_all.py https://example.com   # CLI
+python snapshot_all.py ./some-folder         # folder mode (no browser needed)
 ```
+
+## Code layout
+
+- `snapshot_gui.py` — Tkinter app
+- `snapshot_all.py` — CLI plus website and Android engines
+- `snapshot_desktop.py` — Windows app engine
+- `snapshot_folder.py` — folder engine
+- `snapshot_common.py` — shared helpers (stop flag, slugify, default avoid list)
+
+Every engine exposes `run_*(target, out_dir, args)` and checks `snapshot_common.STOP` so the GUI can stop it.
 
 ## Guidelines
 
 - **Language:** all user-facing text (GUI labels, messages, README) is **English**.
+- **Theme:** the GUI is dark with an orange accent — reuse the color constants at the top of `snapshot_gui.py`.
 - **Style:** follow PEP 8; keep functions small and readable; add short comments for non-obvious logic.
 - **Scope:** keep pull requests focused — one logical change per PR.
 - **Dependencies:** avoid adding new dependencies unless clearly necessary.
@@ -52,9 +64,11 @@ refactor: split web crawler into its own module
 
 There is no automated test suite yet (contributions welcome!). Before opening a PR please check manually:
 
-- [ ] `python -m py_compile snapshot_all.py snapshot_gui.py` passes
-- [ ] Website mode works on a real URL **and** on a local folder
+- [ ] `python -m py_compile snapshot_*.py` passes
+- [ ] Website mode works on a real URL and on a `localhost` server
+- [ ] Folder mode works on a folder with images, a PDF and some code
 - [ ] (If you touched APK code) APK mode works on an emulator or phone
+- [ ] (If you touched Windows-app code) it works on a real Windows app, e.g. Notepad in attach mode
 - [ ] The GUI starts, runs a job, and **Stop** works
 - [ ] No non-English text was added to the UI
 

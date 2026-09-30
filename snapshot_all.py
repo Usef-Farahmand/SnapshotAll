@@ -1,18 +1,23 @@
 #!/usr/bin/env python3
 """
-SnapshotAll engine - take screenshots of every page of a website (online/local)
-or every screen of an Android app (APK).
+SnapshotAll engine + command-line interface.
+
+Modes (auto-detected from the target):
+  web      website URL (online or localhost), or a local .html file
+  apk      Android app (.apk)                      -> needs adb + emulator/phone
+  desktop  Windows app (.exe / .jar / --attach)    -> Windows only
+  folder   folder or file: renders the content of every file (no browser)
 
 Requirements:
-  Web:  pip install playwright && playwright install chromium
-  APK:  pip install uiautomator2  (+ adb and an emulator/phone with USB debugging)
+  pip install -r requirements.txt
 
 Examples:
   python snapshot_all.py https://example.com
   python snapshot_all.py http://localhost:3000 --max-pages 100
-  python snapshot_all.py ./my-site-folder
-  python snapshot_all.py ./index.html --mobile
   python snapshot_all.py app.apk --max-screens 60 --max-depth 4
+  python snapshot_all.py "C:/Program Files/MyApp/MyApp.exe"
+  python snapshot_all.py --attach "Notepad"
+  python snapshot_all.py ./my-project-folder
 """
 import argparse
 import functools
@@ -31,13 +36,11 @@ from datetime import datetime
 from pathlib import Path
 from urllib.parse import urldefrag, urlparse
 
+from snapshot_common import DEFAULT_AVOID, STOP, slugify  # noqa: F401  (re-exported for the GUI)
+
 SKIP_EXT = re.compile(
     r"\.(pdf|zip|rar|7z|gz|tar|png|jpe?g|gif|svg|webp|ico|mp3|mp4|avi|mov|webm|"
     r"css|js|json|xml|woff2?|ttf|eot|apk|exe|dmg|docx?|xlsx?|pptx?)$", re.I)
-
-STOP = threading.Event()  # set by the GUI to stop a running job
-DEFAULT_AVOID = r"delete|remove|log ?out|sign ?out|uninstall|pay|buy|purchase|checkout|reset"
-
 
 class BrowserUnavailable(Exception):
     """No usable Chromium/Edge/Chrome could be launched."""
@@ -72,11 +75,6 @@ def install_chromium():
     p.wait()
     if p.returncode != 0:
         raise RuntimeError("Chromium download failed. Check your internet connection and try again.")
-
-
-def slugify(text, limit=60):
-    s = re.sub(r"[^\w\u0600-\u06FF]+", "_", text).strip("_")
-    return (s or "home")[:limit]
 
 
 # ───────────────────────────── WEB ─────────────────────────────
@@ -298,11 +296,26 @@ def run_apk(apk, out: Path, a):
 
 # ───────────────────────────── CLI ─────────────────────────────
 
+def detect_mode(target):
+    t = (target or "").lower()
+    if t.endswith(".apk"):
+        return "apk"
+    if t.endswith((".exe", ".jar")):
+        return "desktop"
+    p = Path(target)
+    if p.exists():
+        return "web" if p.is_file() and t.endswith((".html", ".htm")) else "folder"
+    return "web"
+
+
 def main():
-    ap = argparse.ArgumentParser(description="Screenshot every page of a website or Android app (APK)")
-    ap.add_argument("target", help="URL, local folder/HTML file, or .apk file")
+    ap = argparse.ArgumentParser(
+        description="Screenshot every page of a website, every screen of an app, or every file in a folder")
+    ap.add_argument("target", nargs="?", default="",
+                    help="URL, .apk / .exe / .jar file, or a folder/file to render")
+    ap.add_argument("--mode", choices=["auto", "web", "apk", "desktop", "folder"], default="auto")
     ap.add_argument("-o", "--out", help="output folder")
-    ap.add_argument("--max-depth", type=int, default=None, help="crawl depth (web: 5, app: 3)")
+    ap.add_argument("--max-depth", type=int, default=None, help="crawl depth (web 5, apk 3, desktop 2)")
     ap.add_argument("--delay", type=float, default=1.0, help="wait after each load/tap (seconds)")
     # web
     ap.add_argument("--max-pages", type=int, default=50)
@@ -310,24 +323,43 @@ def main():
     ap.add_argument("--height", type=int, default=900)
     ap.add_argument("--mobile", action="store_true", help="emulate a phone (iPhone 13)")
     ap.add_argument("--storage-state", help="Playwright session file for pages behind login")
-    # app
+    # apps (apk + desktop)
     ap.add_argument("--max-screens", type=int, default=40)
     ap.add_argument("--max-clicks", type=int, default=25, help="max tappable elements tried per screen")
-    ap.add_argument("--scroll", type=int, default=3, help="scroll steps captured per app screen (0 = off)")
-    ap.add_argument("--serial", help="adb device serial")
-    ap.add_argument("--package", help="app package name (optional)")
-    ap.add_argument("--avoid", default=DEFAULT_AVOID,
-                    help="regex of button labels that must never be tapped")
+    ap.add_argument("--avoid", default=DEFAULT_AVOID, help="regex of button labels that must never be tapped")
+    ap.add_argument("--scroll", type=int, default=3, help="[apk] scroll steps captured per screen (0 = off)")
+    ap.add_argument("--serial", help="[apk] adb device serial")
+    ap.add_argument("--package", help="[apk] app package name (optional)")
+    ap.add_argument("--attach", help="[desktop] attach to a running window whose title matches this regex")
+    # folder
+    ap.add_argument("--no-recursive", dest="recursive", action="store_false", help="[folder] skip subfolders")
+    ap.add_argument("--max-files", type=int, default=500, help="[folder] maximum files to render")
+    ap.add_argument("--pdf-pages", type=int, default=10, help="[folder] max pages rendered per PDF")
+    ap.add_argument("--text-pages", type=int, default=3, help="[folder] max images per text/code file")
     a = ap.parse_args()
 
-    is_apk = a.target.lower().endswith(".apk")
+    mode = a.mode if a.mode != "auto" else ("desktop" if (a.attach and not a.target) else detect_mode(a.target))
+    if not a.target and not (mode == "desktop" and a.attach):
+        ap.error("a target is required")
     if a.max_depth is None:
-        a.max_depth = 3 if is_apk else 5
+        a.max_depth = {"web": 5, "apk": 3, "desktop": 2, "folder": 0}[mode]
+
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    out = Path(a.out or f"screenshots_{slugify(Path(a.target).stem if is_apk else a.target, 30)}_{stamp}")
+    label = a.attach if (mode == "desktop" and a.attach and not a.target) else a.target
+    stem = Path(label).stem if mode in ("apk", "desktop", "folder") and not a.attach else label
+    out = Path(a.out or f"screenshots_{slugify(stem, 30)}_{stamp}")
     out.mkdir(parents=True, exist_ok=True)
 
-    (run_apk if is_apk else run_web)(a.target, out, a)
+    if mode == "web":
+        run_web(a.target, out, a)
+    elif mode == "apk":
+        run_apk(a.target, out, a)
+    elif mode == "desktop":
+        from snapshot_desktop import run_desktop
+        run_desktop(a.target, out, a)
+    else:
+        from snapshot_folder import run_folder
+        run_folder(a.target, out, a)
 
 
 if __name__ == "__main__":

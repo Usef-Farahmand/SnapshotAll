@@ -6,6 +6,18 @@ and this project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-09-30
+
+### Added
+- **Folder mode**: renders the content of every file (images, PDFs, text/code, Word/PowerPoint/Excel, archives) directly — no browser.
+- **Windows app mode**: capture `.exe` / `.jar` apps, or attach to a running window, via UI Automation.
+- Project logo, application icon and installer icon.
+
+### Changed
+- New dark and orange GUI with three separate tabs: **Website**, **App (APK / EXE)** and **Folder**.
+- Removed the folder/HTML source buttons from the website input; local sites are captured through `localhost` URLs.
+- CLI auto-detects the mode (`--mode` to override) and gained folder and desktop options.
+
 ## [1.0.0] - 2026-09-30
 
 ### Added
