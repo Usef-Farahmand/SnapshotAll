@@ -1,0 +1,57 @@
+name: Bug report
+description: Something isn't working as expected
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! Please fill in as much as you can. Do **not** include passwords, cookies or private data.
+  - type: dropdown
+    id: mode
+    attributes:
+      label: What were you capturing?
+      options:
+        - Website (online)
+        - Website (local / localhost)
+        - Local folder or HTML file
+        - Android APK
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: Describe the problem and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open SnapshotAll
+        2. Enter ...
+        3. Click Start
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: SnapshotAll version
+      description: The release you downloaded (e.g. v1.0.7), or "source".
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: Windows 11 23H2
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: Log
+      description: Click **Copy log** in the app (or attach `log.txt` from the output folder) and paste it here.
+      render: shell
