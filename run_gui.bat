@@ -6,13 +6,11 @@ if errorlevel 1 (
   pause
   exit /b 1
 )
-set PLAYWRIGHT_BROWSERS_PATH=0
 if not exist .venv (
   echo First run: installing requirements, please wait...
   python -m venv .venv
   call .venv\Scripts\activate
   pip install -r requirements.txt
-  playwright install chromium
 ) else (
   call .venv\Scripts\activate
 )

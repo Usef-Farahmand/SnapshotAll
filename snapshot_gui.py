@@ -2,9 +2,15 @@
 """SnapshotAll - desktop GUI (website / APK screenshot tool)"""
 import os
 import sys
+from pathlib import Path
 
-# Keep the Chromium browser inside the playwright package (needed for the frozen .exe)
-os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "0")
+# Where a downloaded Chromium (fallback only) is stored.
+# The app first tries Microsoft Edge / Google Chrome, which need no download.
+if getattr(sys, "frozen", False):
+    os.environ["PLAYWRIGHT_BROWSERS_PATH"] = str(
+        Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "SnapshotAll" / "browsers")
+else:
+    os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "0")
 
 import argparse
 import queue
@@ -243,15 +249,11 @@ class App(tk.Tk):
             try:
                 try:
                     runner(target, out, ns)
-                except Exception as e:
-                    if "Executable doesn't exist" in str(e) and not getattr(sys, "frozen", False):
-                        print("Chromium is not installed. Installing it now (this can take a few minutes)…")
-                        r = subprocess.run([sys.executable, "-m", "playwright", "install", "chromium"],
-                                           capture_output=True, text=True)
-                        print(r.stdout, r.stderr)
-                        runner(target, out, ns)
-                    else:
-                        raise
+                except sa.BrowserUnavailable as e:
+                    print(f"No usable browser found ({e}).")
+                    print("Downloading Chromium (one-time, about 150 MB)…")
+                    sa.install_chromium()
+                    runner(target, out, ns)
             except SystemExit as e:
                 print(e.code if e.code else "")
             except Exception:

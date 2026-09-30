@@ -8,8 +8,6 @@ on:
 jobs:
   build:
     runs-on: windows-latest
-    env:
-      PLAYWRIGHT_BROWSERS_PATH: "0"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -18,7 +16,6 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -r requirements.txt pyinstaller
-          playwright install chromium
       - name: Build exe
         run: pyinstaller --noconfirm --onedir --windowed --name SnapshotAll --collect-all playwright --collect-all uiautomator2 --collect-all adbutils snapshot_gui.py
       - name: Build installer

@@ -13,6 +13,10 @@ Created by [Usef Farahmand](https://github.com/Usef-Farahmand).
 - **Android APK**: installs the app on an emulator/phone, taps through the UI, and captures every unique screen (with optional scrolling). Dangerous buttons (delete, logout, pay, …) are skipped.
 - Output folder with all PNGs plus `index.tsv` (file → URL / tap path) and `log.txt`.
 
+## Browser used
+
+SnapshotAll uses **Microsoft Edge** (built into Windows) or **Google Chrome** if available — no download needed. If neither can be launched, it downloads Chromium once (about 150 MB, needs internet).
+
 ## Download (Windows)
 
 Go to **Actions → Build Windows EXE → latest run → Artifacts**:
@@ -26,7 +30,6 @@ Windows SmartScreen may warn because the app is not code-signed: **More info →
 
 ```bash
 pip install -r requirements.txt
-playwright install chromium
 python snapshot_gui.py            # GUI
 python snapshot_all.py https://example.com   # command line
 ```

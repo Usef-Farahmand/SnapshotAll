@@ -39,6 +39,41 @@ STOP = threading.Event()  # set by the GUI to stop a running job
 DEFAULT_AVOID = r"delete|remove|log ?out|sign ?out|uninstall|pay|buy|purchase|checkout|reset"
 
 
+class BrowserUnavailable(Exception):
+    """No usable Chromium/Edge/Chrome could be launched."""
+
+
+def launch_browser(pw):
+    """Try the Playwright Chromium first, then Microsoft Edge, then Google Chrome."""
+    last = None
+    for kw in ({}, {"channel": "msedge"}, {"channel": "chrome"}):
+        try:
+            return pw.chromium.launch(**kw)
+        except Exception as e:  # missing executable, etc.
+            last = e
+    msg = (str(last).strip().splitlines() or ["browser launch failed"])[0]
+    raise BrowserUnavailable(msg)
+
+
+def install_chromium():
+    """Download Playwright's Chromium using the driver bundled with the playwright package."""
+    from playwright._impl._driver import compute_driver_executable, get_driver_env
+    drv = compute_driver_executable()
+    cmd = [str(x) for x in drv] if isinstance(drv, (tuple, list)) else [str(drv)]
+    try:
+        env = get_driver_env()
+    except Exception:
+        env = None
+    flags = 0x08000000 if sys.platform == "win32" else 0  # no console window flash
+    p = subprocess.Popen(cmd + ["install", "chromium"], env=env, stdout=subprocess.PIPE,
+                         stderr=subprocess.STDOUT, text=True, creationflags=flags)
+    for line in p.stdout:
+        print(line.rstrip())
+    p.wait()
+    if p.returncode != 0:
+        raise RuntimeError("Chromium download failed. Check your internet connection and try again.")
+
+
 def slugify(text, limit=60):
     s = re.sub(r"[^\w\u0600-\u06FF]+", "_", text).strip("_")
     return (s or "home")[:limit]
@@ -81,7 +116,7 @@ def run_web(target, out: Path, a):
     lines = []
 
     with sync_playwright() as pw:
-        browser = pw.chromium.launch()
+        browser = launch_browser(pw)
         kw = {}
         if a.mobile:
             kw.update(pw.devices["iPhone 13"])
