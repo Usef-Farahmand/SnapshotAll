@@ -1,0 +1,10 @@
+.venv/
+.venv-build/
+build/
+dist/
+Output/
+__pycache__/
+*.pyc
+*.spec
+SnapshotAll_Output/
+screenshots_*/

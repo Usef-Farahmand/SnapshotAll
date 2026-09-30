@@ -1,0 +1,33 @@
+name: Build Windows EXE
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    env:
+      PLAYWRIGHT_BROWSERS_PATH: "0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt pyinstaller
+          playwright install chromium
+      - name: Build exe
+        run: pyinstaller --noconfirm --onedir --windowed --name SnapshotAll --collect-all playwright --collect-all uiautomator2 --collect-all adbutils snapshot_gui.py
+      - name: Build installer
+        run: '& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer.iss'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SnapshotAll_Setup
+          path: Output/SnapshotAll_Setup.exe
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SnapshotAll_Portable
+          path: dist/SnapshotAll
