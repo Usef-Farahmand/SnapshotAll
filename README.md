@@ -141,7 +141,7 @@ Then choose `auth.json` as the **session file** in step 2, or pass `--storage-st
 
 ## Code signing
 
-Windows builds are not signed yet, so SmartScreen may warn on first launch. [CODE_SIGNING.md](CODE_SIGNING.md) explains why, how to verify a download, and the plan to remove the warning (free signing for open-source projects through the SignPath Foundation).
+Windows builds are not signed yet, so SmartScreen may warn on first launch. [CODE_SIGNING.md](CODE_SIGNING.md) explains why, how to verify a download, and the options for removing the warning (a low-cost open-source certificate, or Microsoft Store distribution).
 
 ## Run from source
 

@@ -34,14 +34,17 @@ SmartScreen judges downloads by **reputation**:
 
 | Option | Cost | Notes |
 |---|---|---|
-| **SignPath Foundation** (free for open source) | Free | Needs a public repo, an OSI license (MIT ✔), CI-built releases, MFA on GitHub, a published code-signing policy (this file) and a short application. The certificate is issued to *SignPath Foundation*, so that name appears as the publisher. **Best fit for this project.** |
-| **OV code-signing certificate** (Sectigo, DigiCert, SSL.com, …) | Paid, yearly | Certificates must live on a hardware token or cloud HSM. Reputation still builds with downloads. |
+| **Microsoft Store (MSIX)** | Individual developer registration is free (2026) | Store apps do not show the SmartScreen prompt, and MSIX packages are signed by the Store. The app must be packaged as MSIX and pass certification. Hosting a plain EXE/MSI installer instead requires your own signature. |
+| **Certum "Open Source Code Signing"** | From roughly €49–58 per year (check the current price) | An individual certificate issued as "Open Source Developer <your name>". Reputation still builds with downloads. Cloud-key signing is harder to automate in CI than a normal token. |
+| **Other OV certificates** (Sectigo, DigiCert, SSL.com, …) | Paid, yearly (about $115 and up) | Keys must live on a hardware token or cloud HSM. Reputation still builds with downloads. |
+| **SignPath Foundation** (free for open source) | Free | Requires a public repo, an OSI license, CI-built releases, MFA on GitHub, a published code-signing policy and an accepted application. Approval depends on how established the project is — it can be re-submitted later. The certificate is issued to *SignPath Foundation*. |
 | **Azure Artifact Signing** (formerly Trusted Signing) | Monthly fee | Availability is limited by country and developer type — check the current rules before planning around it. |
-| **Microsoft Store (MSIX)** | Developer account | Store apps do not show the SmartScreen prompt, but the app must be packaged as MSIX. |
 
 ## Enabling signing (for maintainers)
 
-### 1. Apply to SignPath Foundation
+The steps below use SignPath as the example. For a purchased certificate, the same place in the workflow (after *Build installer*, before checksums and release) is where a signing step goes.
+
+### 1. If you use SignPath Foundation
 
 1. Make sure GitHub two-factor authentication is on for every maintainer.
 2. Keep this file and the [Code of Conduct](CODE_OF_CONDUCT.md) in the repository, and link to this policy from the README (already done).
@@ -78,7 +81,7 @@ Place it after *Build installer* and before the checksum / release steps, so the
 
 ### 3. Update the documentation
 
-Once signing works, replace the *Current status* section above, and add this line to the README and to the download page:
+Once signing works, replace the *Current status* section above. If you use SignPath, also add this line to the README and to the download page:
 
 > Free code signing provided by [SignPath.io](https://signpath.io), certificate by [SignPath Foundation](https://signpath.org).
 

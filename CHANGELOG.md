@@ -11,7 +11,7 @@ and this project follows [Semantic Versioning](https://semver.org/).
 ### Added
 - Developer website (<https://www.useffarahmand.com/>) in **Settings → About** and in the README.
 - Windows title bar painted in the app's color (Windows 11; Windows 10 gets the dark title bar).
-- `CODE_SIGNING.md`: code-signing policy, SmartScreen explanation and a ready plan for free signing through the SignPath Foundation.
+- `CODE_SIGNING.md`: code-signing policy, SmartScreen explanation and the available options (Microsoft Store, low-cost open-source certificate, SignPath Foundation).
 - Releases now include `SHA256SUMS.txt`.
 
 ### Fixed
