@@ -12,10 +12,10 @@
 
 ## How was it tested?
 
-- [ ] `python -m py_compile snapshot_all.py snapshot_gui.py`
-- [ ] Website mode (URL and local folder)
+- [ ] `python -m py_compile snapshot_*.py`
+- [ ] Website mode (URL and localhost)
 - [ ] APK mode (emulator or phone)
-- [ ] GUI (start, stop, log)
+- [ ] GUI wizard (source, settings, scan with previews, save)
 
 ## Checklist
 

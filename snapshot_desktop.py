@@ -12,7 +12,7 @@ import time
 from collections import deque
 from pathlib import Path
 
-from snapshot_common import STOP, slugify
+from snapshot_common import STOP, emit, slugify
 
 # Always avoided for desktop apps (on top of the user's --avoid list)
 DESKTOP_EXTRA = r"exit|quit|close|minimi[sz]e|maximi[sz]e|restore|shut ?down|save|overwrite|send|submit"
@@ -120,7 +120,7 @@ def run_desktop(target, out: Path, a):
 
     start()
     queue = deque([[]])
-    seen, shots, lines = set(), 0, []
+    seen, shots = set(), 0
     first = True
     while queue and shots < a.max_screens and not STOP.is_set():
         path = queue.popleft()
@@ -154,8 +154,9 @@ def run_desktop(target, out: Path, a):
                 shots += 1
                 name = f"{shots:03d}_{slugify(label, 30)}.png"
                 shoot(win, name)
-                lines.append(f"{name}\t{' > '.join(p[2] for p in path) or 'home'}")
-                print(f"[{shots}] {lines[-1].split(chr(9))[1]}")
+                trail = " > ".join(p[2] for p in path) or "home"
+                emit(a, out / name, trail)
+                print(f"[{shots}] {trail}")
                 if len(path) < a.max_depth and (state["launched"] or not path):
                     for key, idx, lb, _c in cands[: a.max_clicks]:
                         queue.append(path + [(key, idx, lb)])
@@ -167,5 +168,4 @@ def run_desktop(target, out: Path, a):
             print(f"  ! Error while exploring: {e}")
 
     stop_app()
-    (out / "index.tsv").write_text("\n".join(lines), encoding="utf-8")
-    print(f"\nDone: {shots} window state(s) saved to {out}")
+    print(f"\nDone: {shots} window state(s) captured")

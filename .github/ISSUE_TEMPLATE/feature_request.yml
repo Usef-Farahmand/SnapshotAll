@@ -29,7 +29,8 @@ body:
         - Website capture
         - Android APK capture
         - Windows app capture
+        - Windows app capture
         - Folder capture
-        - GUI
+        - Interface / wizard
         - Packaging / installer
         - Documentation

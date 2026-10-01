@@ -6,7 +6,7 @@ By participating you agree to follow our [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## Ways to contribute
 
-- **Report a bug** — use the [bug report form](../../issues/new?template=bug_report.yml). Include your OS, app version, the target type (website / APK) and the log (**Copy log** button, or `log.txt`).
+- **Report a bug** — use the [bug report form](../../issues/new?template=bug_report.yml). Include your OS, app version, the target type (website / APK / Windows app) and the error text (Scan page → **Details → Copy details**).
 - **Suggest a feature** — use the [feature request form](../../issues/new?template=feature_request.yml).
 - **Improve the docs** — typos, clearer explanations and examples are always welcome.
 - **Send a pull request** — see below.
@@ -25,18 +25,16 @@ python -m venv .venv
 pip install -r requirements.txt
 python snapshot_gui.py                 # GUI
 python snapshot_all.py https://example.com   # CLI
-python snapshot_all.py ./some-folder         # folder mode (no browser needed)
 ```
 
 ## Code layout
 
-- `snapshot_gui.py` — Tkinter app
+- `snapshot_gui.py` — wizard-style desktop app (customtkinter)
 - `snapshot_all.py` — CLI plus website and Android engines
 - `snapshot_desktop.py` — Windows app engine
-- `snapshot_folder.py` — folder engine
-- `snapshot_common.py` — shared helpers (stop flag, slugify, default avoid list)
+- `snapshot_common.py` — shared helpers (stop flag, `emit`, slugify, app name/version/author)
 
-Every engine exposes `run_*(target, out_dir, args)` and checks `snapshot_common.STOP` so the GUI can stop it.
+Every engine exposes `run_*(target, out_dir, args)`, checks `snapshot_common.STOP` so the GUI can stop it, and reports each new screenshot through `snapshot_common.emit(args, path, label)` — that is how the GUI shows live previews.
 
 ## Guidelines
 
@@ -66,10 +64,9 @@ There is no automated test suite yet (contributions welcome!). Before opening a 
 
 - [ ] `python -m py_compile snapshot_*.py` passes
 - [ ] Website mode works on a real URL and on a `localhost` server
-- [ ] Folder mode works on a folder with images, a PDF and some code
 - [ ] (If you touched APK code) APK mode works on an emulator or phone
 - [ ] (If you touched Windows-app code) it works on a real Windows app, e.g. Notepad in attach mode
-- [ ] The GUI starts, runs a job, and **Stop** works
+- [ ] The GUI wizard works end to end: Source → Settings → Scan (previews, selection, **Stop**) → Save
 - [ ] No non-English text was added to the UI
 
 ## Pull request process

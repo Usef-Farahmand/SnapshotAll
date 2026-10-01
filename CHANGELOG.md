@@ -6,17 +6,22 @@ and this project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-## [1.1.0] - 2026-09-30
+## [1.2.0] - 2026-09-30
 
 ### Added
-- **Folder mode**: renders the content of every file (images, PDFs, text/code, Word/PowerPoint/Excel, archives) directly — no browser.
-- **Windows app mode**: capture `.exe` / `.jar` apps, or attach to a running window, via UI Automation.
+- Wizard-style interface with four steps: **Source**, **Settings**, **Scan** and **Save**.
+- Live scan page with a progress bar and a preview card for every page or screen found, with per-item selection, *Select all / none* and a *View* button.
+- Toolbar with *New capture* and *Settings*; Settings contains the default save location and an About section with the app version and developer.
+- Windows app capture (`.exe` / `.jar` / attach to a running window) via UI Automation.
 - Project logo, application icon and installer icon.
 
 ### Changed
-- New dark and orange GUI with three separate tabs: **Website**, **App (APK / EXE)** and **Folder**.
-- Removed the folder/HTML source buttons from the website input; local sites are captured through `localhost` URLs.
-- CLI auto-detects the mode (`--mode` to override) and gained folder and desktop options.
+- Modern dark and orange design (rounded cards, sidebar stepper) built with CustomTkinter.
+- Screenshots are kept in a temporary folder during the scan and only the selected ones are copied to the chosen save location.
+- The app no longer writes log or index files; errors are shown in a *Details* panel with a *Copy details* button.
+
+### Removed
+- Folder / local-file source and its buttons. Local sites are captured through `localhost` URLs.
 
 ## [1.0.0] - 2026-09-30
 

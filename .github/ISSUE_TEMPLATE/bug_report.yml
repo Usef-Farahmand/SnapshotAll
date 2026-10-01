@@ -16,7 +16,6 @@ body:
         - Website (local / localhost)
         - Android APK
         - Windows app (EXE / JAR / attach)
-        - Folder
     validations:
       required: true
   - type: textarea
@@ -54,5 +53,5 @@ body:
     id: log
     attributes:
       label: Log
-      description: Click **Copy log** in the app (or attach `log.txt` from the output folder) and paste it here.
+      description: On the Scan page click **Details → Copy details** and paste it here.
       render: shell
