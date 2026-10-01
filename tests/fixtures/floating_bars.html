@@ -1,0 +1,24 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{margin:0;font-family:sans-serif}
+header{position:fixed;top:0;left:0;right:0;height:60px;background:#111;color:#fff;display:flex;align-items:center;padding:0 24px;z-index:50}
+section{height:800px;display:flex;align-items:center;justify-content:center;font-size:48px;color:#fff}
+.s1{background:#f97316}.s2{background:#3b82f6}.s3{background:#22c55e}.s4{background:#a855f7}.s5{background:#ec4899}
+#site-footer{position:fixed;bottom:0;left:0;right:0;height:120px;background:#222;color:#fff;display:flex;align-items:center;justify-content:center;font-size:28px;z-index:10}
+.cookie{position:fixed;bottom:140px;right:20px;width:300px;background:#fff;border:2px solid #000;padding:16px;z-index:60}
+.stickybar{position:sticky;bottom:0;background:#facc15;height:70px;display:flex;align-items:center;justify-content:center;font-size:24px}
+.end{height:200px;background:#0f172a;color:#fff;display:flex;align-items:center;justify-content:center;font-size:32px}
+main{margin-bottom:120px}
+</style></head><body>
+<header>TOP HEADER (fixed top)</header>
+<main>
+<section class="s1" style="padding-top:60px">Section 1</section>
+<section class="s2">Section 2</section>
+<div class="stickybar">STICKY BOTTOM BAR (sticky)</div>
+<section class="s3">Section 3</section>
+<section class="s4">Section 4</section>
+<section class="s5">Section 5</section>
+<div class="end">END OF PAGE CONTENT</div>
+</main>
+<div class="cookie">COOKIE BANNER (fixed bottom-right)</div>
+<footer id="site-footer">FOOTER (fixed, reveal style)</footer>
+</body></html>

@@ -6,6 +6,16 @@ and this project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.2.2] - 2026-10-01
+
+### Fixed
+- Website screenshots sometimes showed the footer (or a cookie banner, chat bubble, sticky bar, side bar) in the middle of the page. Full-page screenshots draw `position: fixed` / `sticky` elements relative to the first screen; they are now tidied before capture: sticky elements return to normal flow, fixed footers move to the end of the page, floating widgets are hidden and fixed headers stay at the top.
+- Pages with smooth scrolling (`scroll-behavior: smooth`) were sometimes captured while still scrolling back to the top. Smooth scrolling is now disabled during capture, and the scroll pass waits until lazy-loaded content stops growing.
+
+### Added
+- **Tidy floating bars** switch in the website settings (`--keep-floating` on the command line to turn it off).
+- Browser regression tests (`tests/`) that run in CI.
+
 ## [1.2.1] - 2026-09-30
 
 ### Added

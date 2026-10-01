@@ -75,6 +75,7 @@ The app has a modern dark-and-orange interface with a toolbar (**New capture**, 
 - Any online site or local development server (`example.com`, `https://www.example.com`, `localhost:3000`) — `https://` and `www.` are optional; redirects are followed automatically.
 - Crawls same-site links, reads `sitemap.xml`, follows SPA hash routes (`#/about`).
 - Auto-scrolls so lazy-loaded content appears; captures full-page images.
+- Tidies floating elements so they don't land in the middle of a long screenshot: sticky and fixed footers go to the end of the page, cookie banners / chat bubbles / "back to top" buttons are hidden, fixed headers stay at the top (can be turned off).
 - Desktop or **mobile** (iPhone 13) viewport.
 - Pages **behind a login** via a Playwright session file.
 - Uses **Microsoft Edge / Google Chrome** if installed (no download); otherwise downloads Chromium once.
@@ -122,6 +123,7 @@ python snapshot_all.py --attach "Untitled - Notepad"
 | `--max-pages` | web | `50` | Maximum pages to capture |
 | `--width`, `--height` | web | `1440`, `900` | Viewport size |
 | `--mobile` | web | off | Emulate a phone (iPhone 13) |
+| `--keep-floating` | web | off | Don't move or hide fixed / sticky bars (footers, cookie banners, chat bubbles) |
 | `--storage-state` | web | – | Playwright session file for logged-in pages |
 | `--max-screens` | apps | `40` | Maximum screens / window states |
 | `--max-clicks` | apps | `25` | Max tappable elements tried per screen |

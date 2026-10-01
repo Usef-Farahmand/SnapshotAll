@@ -92,6 +92,75 @@ def normalize(url):
     return base
 
 
+# Scrolls the whole page once so lazy-loaded content, images and scroll animations are triggered,
+# then returns to the top. Smooth scrolling is switched off (it would leave the page mid-scroll).
+SCROLL_JS = """async () => {
+    const doc = document.documentElement;
+    const st = document.createElement('style');
+    st.textContent = 'html, body { scroll-behavior: auto !important; }';
+    document.head.appendChild(st);
+    const sleep = ms => new Promise(r => setTimeout(r, ms));
+    const height = () => Math.max(doc.scrollHeight, document.body ? document.body.scrollHeight : 0);
+    const step = Math.max(Math.round(window.innerHeight * 0.8), 200);
+    let y = 0, last = height(), stable = 0;
+    const t0 = Date.now();
+    while (Date.now() - t0 < 20000) {              // hard limit for endless-scroll pages
+        window.scrollTo({ top: y, behavior: 'instant' });
+        await sleep(120);
+        const h = height();
+        if (window.scrollY + window.innerHeight >= h - 2) {
+            stable = (h === last) ? stable + 1 : 0;  // at the bottom: wait until the height stops growing
+            if (stable >= 3) break;
+        } else {
+            stable = 0;
+        }
+        last = h;
+        y = Math.min(y + step, Math.max(h - window.innerHeight, 0));
+    }
+    window.scrollTo({ top: 0, behavior: 'instant' });
+    await sleep(250);
+}"""
+
+# Full-page screenshots draw position:fixed / sticky elements relative to the FIRST screen, so a
+# sticky footer, a cookie banner or a chat bubble ends up in the middle of a long page.
+#   - sticky elements   -> back into normal flow
+#   - fixed footers     -> moved to the real bottom of the page
+#   - other fixed items that do not start at the top of the screen (cookie banners, chat, "back to top") -> hidden
+#   - fixed headers / side bars that start at the top, and full-screen layers -> left alone
+TIDY_JS = """() => {
+    const doc = document.documentElement;
+    const vw = window.innerWidth, vh = window.innerHeight;
+    const docH = Math.max(doc.scrollHeight, document.body ? document.body.scrollHeight : 0);
+    const imp = (el, k, v) => el.style.setProperty(k, v, 'important');
+    const footerLike = el => el.matches('footer, [role="contentinfo"], [id*="footer" i], [class*="footer" i]')
+        || !!el.querySelector('footer, [role="contentinfo"]');
+    const res = { moved: 0, hidden: 0, unstuck: 0 };
+    for (const el of Array.from(document.body.querySelectorAll('*'))) {
+        const cs = getComputedStyle(el);
+        if (cs.position === 'sticky') {
+            imp(el, 'position', 'relative'); imp(el, 'top', 'auto'); imp(el, 'bottom', 'auto');
+            res.unstuck++;
+            continue;
+        }
+        if (cs.position !== 'fixed' || cs.display === 'none' || cs.visibility === 'hidden') continue;
+        const r = el.getBoundingClientRect();
+        if (r.width < 1 || r.height < 1) continue;
+        if (r.width >= vw * 0.9 && r.height >= vh * 0.9) continue;   // full-screen layer: leave alone
+        if (r.top <= vh * 0.15) continue;                            // starts at the top: header / side bar
+        if (footerLike(el)) {
+            imp(el, 'position', 'absolute'); imp(el, 'bottom', 'auto'); imp(el, 'top', '0px');
+            const base = el.getBoundingClientRect().top + window.scrollY;
+            imp(el, 'top', Math.max(0, docH - r.height - base) + 'px');
+            res.moved++;
+        } else {
+            imp(el, 'visibility', 'hidden');
+            res.hidden++;
+        }
+    }
+    return res;
+}"""
+
+
 def normalize_target(target):
     """Turn what a person types ('example.com', 'www.example.com', 'localhost:3000') into a full URL."""
     t = target.strip().strip('"')
@@ -191,14 +260,11 @@ def run_web(target, out: Path, a):
                 except Exception:
                     pass
                 page.wait_for_timeout(int(a.delay * 1000))
-                # scroll down to trigger lazy-loaded content
-                page.evaluate("""async () => {
-                    await new Promise(r => { let i=0;
-                      const t=setInterval(()=>{ window.scrollBy(0,600);
-                        if(++i>60 || window.scrollY+innerHeight>=document.body.scrollHeight){clearInterval(t);r();}
-                      },120); });
-                    window.scrollTo(0,0);
-                }""")
+                # scroll through the page to trigger lazy-loaded content, then tidy floating bars
+                page.evaluate(SCROLL_JS)
+                if not getattr(a, "keep_floating", False):
+                    page.evaluate(TIDY_JS)
+                    page.wait_for_timeout(150)
                 count += 1
                 path = urlparse(url)
                 name = f"{count:03d}_{slugify((path.path or '/') + ('?' + path.query if path.query else '') + ('#' + path.fragment if path.fragment else ''))}.png"
@@ -364,6 +430,8 @@ def main():
     ap.add_argument("--width", type=int, default=1440)
     ap.add_argument("--height", type=int, default=900)
     ap.add_argument("--mobile", action="store_true", help="emulate a phone (iPhone 13)")
+    ap.add_argument("--keep-floating", action="store_true",
+                    help="do not move/hide fixed or sticky bars (footers, cookie banners, chat bubbles)")
     ap.add_argument("--storage-state", help="Playwright session file for pages behind login")
     # apps (apk + desktop)
     ap.add_argument("--max-screens", type=int, default=40)

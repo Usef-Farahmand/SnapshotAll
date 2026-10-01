@@ -4,7 +4,7 @@ import threading
 from pathlib import Path
 
 APP_NAME = "SnapshotAll"
-APP_VERSION = "1.2.1"
+APP_VERSION = "1.2.2"
 APP_AUTHOR = "Usef Farahmand"
 APP_URL = "https://github.com/Usef-Farahmand"
 APP_WEBSITE = "https://www.useffarahmand.com/"

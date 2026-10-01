@@ -60,7 +60,7 @@ refactor: split web crawler into its own module
 
 ## Testing your change
 
-There is no automated test suite yet (contributions welcome!). Before opening a PR please check manually:
+Browser tests for full-page capture live in `tests/` (`pip install playwright pytest && playwright install chromium && python -m pytest`). Everything else is checked manually — before opening a PR please check:
 
 - [ ] `python -m py_compile snapshot_*.py` passes
 - [ ] Website mode works on a real URL and on a `localhost` server

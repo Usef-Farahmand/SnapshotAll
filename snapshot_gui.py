@@ -385,6 +385,7 @@ class App(ctk.CTk):
         self.width = tk.StringVar(value="1440")
         self.height = tk.StringVar(value="900")
         self.session = tk.StringVar()
+        self.tidy_floating = tk.BooleanVar(value=True)
         self.max_screens = tk.StringVar(value="40")
         self.depth_app = tk.StringVar(value="3")
         self.max_clicks = tk.StringVar(value="25")
@@ -742,9 +743,14 @@ class App(ctk.CTk):
             self.w_entry = self._field(inner, 3, 1, "Width", self.width, 110)
             self.h_entry = self._field(inner, 3, 2, "Height", self.height, 110)
             self._sync_viewport()
-            self._section(inner, "PAGES BEHIND A LOGIN  (OPTIONAL)", 4)
+            self._section(inner, "PAGE CLEAN-UP", 4)
+            ctk.CTkSwitch(inner, text="Tidy floating bars  (sticky footers, cookie banners, chat bubbles)",
+                          variable=self.tidy_floating, onvalue=True, offvalue=False, progress_color=ORANGE,
+                          button_color=FG, button_hover_color=FG, fg_color=FIELD, text_color=FG,
+                          font=self.f_body).grid(row=5, column=0, columnspan=4, sticky="w", pady=(0, 14))
+            self._section(inner, "PAGES BEHIND A LOGIN  (OPTIONAL)", 6)
             row = ctk.CTkFrame(inner, fg_color="transparent")
-            row.grid(row=5, column=0, columnspan=4, sticky="ew")
+            row.grid(row=7, column=0, columnspan=4, sticky="ew")
             row.grid_columnconfigure(0, weight=1)
             self._entry(row, self.session, "Playwright session file (.json)").grid(row=0, column=0, sticky="ew")
             self._ghost(row, "Browse…", self.pick_session, width=100).grid(row=0, column=1, padx=(8, 0))
@@ -866,6 +872,7 @@ class App(ctk.CTk):
             delay=self._num(self.delay_web if is_web else self.delay_app, 1.0, float),
             max_pages=self.limit, width=self._num(self.width, 1440, lo=320), height=self._num(self.height, 900, lo=240),
             mobile=self.viewport.get() == "Mobile", storage_state=self.session.get().strip() or None,
+            keep_floating=not self.tidy_floating.get(),
             max_screens=self.limit, max_clicks=self._num(self.max_clicks, 25, lo=1), scroll=self._num(self.scroll, 3),
             serial=self.serial.get().strip() or None, package=self.package.get().strip() or None,
             avoid=self.avoid.get().strip(), attach=label if (mode == "desktop" and not target) else None,

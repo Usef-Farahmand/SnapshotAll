@@ -1,0 +1,26 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+html{scroll-behavior:smooth}
+body{margin:0;font-family:sans-serif}
+nav{position:fixed;top:0;bottom:0;left:0;width:160px;background:#1e293b;color:#fff;padding:20px;box-sizing:border-box}
+.content{margin-left:160px}
+section{height:600px;display:flex;align-items:center;justify-content:center;font-size:40px;color:#fff}
+.btt{position:fixed;right:24px;bottom:24px;width:56px;height:56px;border-radius:28px;background:#000;color:#fff;display:flex;align-items:center;justify-content:center}
+footer.real{height:160px;background:#334155;color:#fff;display:flex;align-items:center;justify-content:center;font-size:28px}
+</style></head><body>
+<nav>SIDEBAR (fixed, full height)</nav>
+<div class="content" id="c">
+<section style="background:#f97316" data-n="1">Section 1</section>
+<section style="background:#3b82f6" data-n="2">Section 2</section>
+<section style="background:#22c55e" data-n="3">Section 3</section>
+<footer class="real" id="realfooter">REAL FOOTER (normal flow)</footer>
+</div>
+<div class="btt">TOP</div>
+<script>
+let added=0; const colors=["#a855f7","#ec4899","#eab308","#14b8a6"];
+addEventListener('scroll',()=>{
+  if(added<4 && innerHeight+scrollY>=document.documentElement.scrollHeight-200){
+    const s=document.createElement('section'); s.style.background=colors[added]; s.textContent='Lazy section '+(added+1);
+    document.getElementById('c').insertBefore(s, document.getElementById('realfooter')); added++;
+  }
+});
+</script></body></html>
