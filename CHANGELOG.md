@@ -6,7 +6,17 @@ and this project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-09-30
+
+### Added
+- Developer website (<https://www.useffarahmand.com/>) in **Settings → About** and in the README.
+- Windows title bar painted in the app's color (Windows 11; Windows 10 gets the dark title bar).
+- `CODE_SIGNING.md`: code-signing policy, SmartScreen explanation and a ready plan for free signing through the SignPath Foundation.
+- Releases now include `SHA256SUMS.txt`.
+
 ### Fixed
+- Addresses typed without `https://` or `www.` (for example `example.com`) found only one page when the site redirected to another host form. The crawler now treats `example.com` and `www.example.com` as the same site, follows redirects (including to a different domain) and no longer captures the same page twice under `http://` and `https://`.
+- Addresses typed without a scheme now start with `https://` (and fall back to `http://` if it cannot connect); `localhost`, private IPs and `host:port` addresses use `http://`.
 - The application icon now appears in the Windows taskbar and title bar (CustomTkinter was replacing it with its own icon); the Settings window uses it too.
 
 ## [1.2.0] - 2026-09-30

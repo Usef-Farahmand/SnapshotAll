@@ -32,6 +32,7 @@
 - [Supported sources](#supported-sources)
 - [Download and install (Windows)](#download-and-install-windows)
 - [Command-line usage](#command-line-usage)
+- [Code signing](#code-signing)
 - [Run from source](#run-from-source)
 - [Build the installer yourself](#build-the-installer-yourself)
 - [Project structure](#project-structure)
@@ -63,12 +64,15 @@ Designers, QA engineers, developers and writers often need a visual record of *e
 </tr>
 </table>
 
-The app has a modern dark-and-orange interface with a toolbar (**New capture**, **Settings**). **Settings** holds the default save location and an **About** section with the app version and the developer's name. Screenshots are kept in a temporary folder during the scan and removed when you finish — nothing else is written to disk, and no log files are created.
+The app has a modern dark-and-orange interface with a toolbar (**New capture**, **Settings**). **Settings** holds the default save location and an **About** section with the app version, the developer's name and website.
+
+<div align="center"><img src="docs/screenshot-5-about.png" alt="Settings and About" width="300"></div>
+ Screenshots are kept in a temporary folder during the scan and removed when you finish — nothing else is written to disk, and no log files are created.
 
 ## Supported sources
 
 ### Website
-- Any online site or local development server (`https://example.com`, `http://localhost:3000`).
+- Any online site or local development server (`example.com`, `https://www.example.com`, `localhost:3000`) — `https://` and `www.` are optional; redirects are followed automatically.
 - Crawls same-site links, reads `sitemap.xml`, follows SPA hash routes (`#/about`).
 - Auto-scrolls so lazy-loaded content appears; captures full-page images.
 - Desktop or **mobile** (iPhone 13) viewport.
@@ -88,7 +92,7 @@ The app has a modern dark-and-orange interface with a toolbar (**New capture**, 
    - `SnapshotAll_Portable.zip` — no installation; unzip and run `SnapshotAll.exe`
 3. Run it.
 
-> **Windows SmartScreen warning?** The app is not code-signed yet. Click **More info → Run anyway**.
+> **Windows SmartScreen warning?** The app is not code-signed yet. Click **More info → Run anyway**. Every release ships with `SHA256SUMS.txt` so you can verify your download — see [CODE_SIGNING.md](CODE_SIGNING.md) for details and how the warning will be removed.
 > You can always review the source code and build the app yourself (see below).
 
 ## Command-line usage
@@ -135,6 +139,10 @@ playwright codegen --save-storage=auth.json https://your-site.example/login
 
 Then choose `auth.json` as the **session file** in step 2, or pass `--storage-state auth.json` on the command line.
 
+## Code signing
+
+Windows builds are not signed yet, so SmartScreen may warn on first launch. [CODE_SIGNING.md](CODE_SIGNING.md) explains why, how to verify a download, and the plan to remove the warning (free signing for open-source projects through the SignPath Foundation).
+
 ## Run from source
 
 Requirements: **Python 3.10+**.
@@ -166,13 +174,14 @@ SnapshotAll/
 ├── snapshot_gui.py        # desktop app: wizard UI (customtkinter)
 ├── snapshot_all.py        # CLI + website and Android engines
 ├── snapshot_desktop.py    # Windows app engine (UI Automation)
-├── snapshot_common.py     # shared helpers, app name / version / author
+├── snapshot_common.py     # shared helpers, app name / version / author / website
 ├── assets/                # logo and icons
 ├── docs/                  # README images
 ├── installer.iss          # Inno Setup installer script
 ├── run_gui.bat            # run the GUI from source on Windows
 ├── build_exe.bat          # build the exe locally on Windows
 ├── requirements.txt
+├── CODE_SIGNING.md        # code-signing policy and SmartScreen guide
 └── .github/               # CI, release workflow, issue & PR templates
 ```
 
@@ -190,6 +199,7 @@ SnapshotAll/
 | "No usable browser found" | SnapshotAll downloads Chromium automatically (internet required). Or install Microsoft Edge / Google Chrome. |
 | `adb not found` / no device | Start an emulator or connect a phone with USB debugging; check `adb devices`. |
 | Windows app: nothing captured | Use **Attach**: start the app yourself, then enter part of its window title. |
+| "Windows protected your PC" | Click **More info → Run anyway**. See [CODE_SIGNING.md](CODE_SIGNING.md). |
 | Ctrl+V doesn't paste | Right-click the field → Paste, or use the **Paste** button. |
 | The scan hit a problem | On the Scan page click **Details**, then **Copy details**, and include it in your bug report. |
 
@@ -207,7 +217,7 @@ Only capture websites and apps that you own or have explicit permission to test.
 
 ## License
 
-Released under the [MIT License](LICENSE) © 2026 [Usef Farahmand](https://github.com/Usef-Farahmand).
+Released under the [MIT License](LICENSE) © 2026 [Usef Farahmand](https://github.com/Usef-Farahmand) · [useffarahmand.com](https://www.useffarahmand.com/).
 
 ## Acknowledgments
 

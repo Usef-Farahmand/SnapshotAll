@@ -1,7 +1,9 @@
 [Setup]
 AppName=SnapshotAll
-AppVersion=1.2.0
+AppVersion=1.2.1
 AppPublisher=Usef Farahmand
+AppPublisherURL=https://www.useffarahmand.com/
+AppSupportURL=https://github.com/Usef-Farahmand/SnapshotAll/issues
 DefaultDirName={autopf}\SnapshotAll
 DefaultGroupName=SnapshotAll
 OutputDir=Output

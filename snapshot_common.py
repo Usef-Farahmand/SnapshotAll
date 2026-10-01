@@ -4,9 +4,10 @@ import threading
 from pathlib import Path
 
 APP_NAME = "SnapshotAll"
-APP_VERSION = "1.2.0"
+APP_VERSION = "1.2.1"
 APP_AUTHOR = "Usef Farahmand"
 APP_URL = "https://github.com/Usef-Farahmand"
+APP_WEBSITE = "https://www.useffarahmand.com/"
 APP_REPO = "https://github.com/Usef-Farahmand/SnapshotAll"
 APP_LICENSE = "MIT License"
 

@@ -92,6 +92,34 @@ def normalize(url):
     return base
 
 
+def normalize_target(target):
+    """Turn what a person types ('example.com', 'www.example.com', 'localhost:3000') into a full URL."""
+    t = target.strip().strip('"')
+    if re.match(r"^[a-zA-Z][a-zA-Z0-9+.-]*://", t):
+        return t
+    host = t.split("/", 1)[0].rsplit("@", 1)[-1]
+    hostname = host.split(":")[0].lower()
+    local = (hostname == "localhost" or hostname.endswith(".local") or ":" in host
+             or re.match(r"^(127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)", hostname))
+    return ("http://" if local else "https://") + t
+
+
+def site_key(netloc):
+    """Identity of a site for 'same site?' checks: lower-case, without www. or default ports."""
+    host = netloc.lower().rsplit("@", 1)[-1]
+    for default_port in (":80", ":443"):
+        if host.endswith(default_port):
+            host = host[: -len(default_port)]
+    return host[4:] if host.startswith("www.") else host
+
+
+def page_key(url):
+    """Identity of a page for de-duplication: ignores scheme, www., trailing slash and plain #fragments."""
+    u = urlparse(normalize(url))
+    return (site_key(u.netloc) + (u.path.rstrip("/") or "/")
+            + (f"?{u.query}" if u.query else "") + (f"#{u.fragment}" if u.fragment else ""))
+
+
 def run_web(target, out: Path, a):
     from playwright.sync_api import sync_playwright
 
@@ -102,12 +130,12 @@ def run_web(target, out: Path, a):
         start_url, server = serve_dir(root.resolve())
         if p.is_file():
             start_url += p.name
-    elif re.match(r"^https?://", target):
-        start_url = target
     else:
-        start_url = "http://" + target
+        start_url = normalize_target(target)
+    # No scheme typed (e.g. "example.com")? We start with https and fall back to http if it can't connect.
+    auto_scheme = not re.match(r"^[a-zA-Z][a-zA-Z0-9+.-]*://", target.strip()) and start_url.startswith("https://")
 
-    origin = urlparse(start_url).netloc
+    origin_key = site_key(urlparse(start_url).netloc)
 
     with sync_playwright() as pw:
         browser = launch_browser(pw)
@@ -122,16 +150,28 @@ def run_web(target, out: Path, a):
         page = ctx.new_page()
 
         queue = deque([(normalize(start_url), 0)])
-        seen = {normalize(start_url)}
+        seen = {page_key(start_url)}
+
+        def goto_page(url, first):
+            try:
+                page.goto(url, wait_until="domcontentloaded", timeout=30000)
+            except Exception:
+                if first and auto_scheme and url.startswith("https://"):
+                    print("  https failed - trying http…")
+                    page.goto("http://" + url[len("https://"):], wait_until="domcontentloaded", timeout=30000)
+                else:
+                    raise
 
         # sitemap.xml (if present)
         try:
-            r = ctx.request.get(f"{urlparse(start_url).scheme}://{origin}/sitemap.xml", timeout=8000)
+            r = ctx.request.get(f"{urlparse(start_url).scheme}://{urlparse(start_url).netloc}/sitemap.xml",
+                                timeout=8000)
             if r.ok:
                 for loc in re.findall(r"<loc>\s*(.*?)\s*</loc>", r.text()):
                     n = normalize(loc)
-                    if urlparse(n).netloc == origin and n not in seen and not SKIP_EXT.search(urlparse(n).path):
-                        seen.add(n)
+                    if (site_key(urlparse(n).netloc) == origin_key and page_key(n) not in seen
+                            and not SKIP_EXT.search(urlparse(n).path)):
+                        seen.add(page_key(n))
                         queue.append((n, 1))
         except Exception:
             pass
@@ -140,7 +180,12 @@ def run_web(target, out: Path, a):
         while queue and count < a.max_pages and not STOP.is_set():
             url, depth = queue.popleft()
             try:
-                page.goto(url, wait_until="domcontentloaded", timeout=30000)
+                goto_page(url, count == 0)
+                if count == 0 and page.url.startswith(("http://", "https://")):
+                    # The site may have redirected us (http -> https, example.com -> www.example.com, ...):
+                    # from now on "same site" means the host we actually landed on.
+                    origin_key = site_key(urlparse(page.url).netloc)
+                    seen.add(page_key(page.url))
                 try:
                     page.wait_for_load_state("networkidle", timeout=8000)
                 except Exception:
@@ -167,9 +212,9 @@ def run_web(target, out: Path, a):
                         if not h.startswith(("http://", "https://")):
                             continue
                         n = normalize(h)
-                        if (urlparse(n).netloc == origin and n not in seen
+                        if (site_key(urlparse(n).netloc) == origin_key and page_key(n) not in seen
                                 and not SKIP_EXT.search(urlparse(n).path)):
-                            seen.add(n)
+                            seen.add(page_key(n))
                             queue.append((n, depth + 1))
             except Exception as e:
                 print(f"  ! Error on {url}: {e}")

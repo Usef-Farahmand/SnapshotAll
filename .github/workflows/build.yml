@@ -41,6 +41,10 @@ jobs:
       - name: Zip portable version
         run: Compress-Archive -Path dist\SnapshotAll -DestinationPath SnapshotAll_Portable.zip
 
+      - name: Create checksums
+        run: |
+          Get-FileHash Output\SnapshotAll_Setup.exe, SnapshotAll_Portable.zip -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  $(Split-Path $_.Path -Leaf)" } | Set-Content -Encoding ascii SHA256SUMS.txt
+
       - uses: actions/upload-artifact@v4
         with:
           name: SnapshotAll_Setup
@@ -56,3 +60,4 @@ jobs:
           files: |
             Output/SnapshotAll_Setup.exe
             SnapshotAll_Portable.zip
+            SHA256SUMS.txt

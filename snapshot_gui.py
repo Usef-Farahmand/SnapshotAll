@@ -32,7 +32,7 @@ from PIL import Image, ImageOps
 
 import snapshot_all as sa
 import snapshot_desktop as sd
-from snapshot_common import APP_AUTHOR, APP_LICENSE, APP_NAME, APP_REPO, APP_URL, APP_VERSION
+from snapshot_common import APP_AUTHOR, APP_LICENSE, APP_NAME, APP_REPO, APP_URL, APP_VERSION, APP_WEBSITE
 
 # ── Dark + orange theme ─────────────────────────────────────────────
 BG = "#110D0A"
@@ -100,6 +100,42 @@ def apply_window_icon(win):
             win.iconphoto(True, win._icon_ref)
     except Exception:
         pass
+
+
+def style_titlebar(win, color=None, text=FG):
+    """Paint the native Windows title bar in the app's color, like Telegram Desktop.
+
+    Works on Windows 11 (build 22000+). Windows 10 cannot recolor the title bar, so there it just
+    gets the dark variant. Does nothing on other systems.
+    """
+    if sys.platform != "win32":
+        return
+    color = color or TOOLBAR
+    try:
+        import ctypes
+        win.update_idletasks()
+        hwnd = ctypes.windll.user32.GetParent(win.winfo_id()) or win.winfo_id()
+
+        def colorref(hex_color):  # COLORREF is 0x00BBGGRR
+            r, g, b = (int(hex_color[i:i + 2], 16) for i in (1, 3, 5))
+            return r | (g << 8) | (b << 16)
+
+        def set_attr(attr, value):
+            v = ctypes.c_int(value)
+            ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, attr, ctypes.byref(v), ctypes.sizeof(v))
+
+        set_attr(20, 1)                  # DWMWA_USE_IMMERSIVE_DARK_MODE (light caption buttons)
+        set_attr(34, colorref(color))    # DWMWA_BORDER_COLOR
+        set_attr(35, colorref(color))    # DWMWA_CAPTION_COLOR
+        set_attr(36, colorref(text))     # DWMWA_TEXT_COLOR
+    except Exception:
+        pass
+
+
+def schedule_titlebar_style(win, color=None):
+    """CustomTkinter re-applies its own title bar shortly after opening, so style it a few times."""
+    for ms in (60, 300, 900):
+        win.after(ms, lambda: style_titlebar(win, color))
 
 
 def settings_file():
@@ -214,9 +250,10 @@ class SettingsDialog(ctk.CTkToplevel):
         super().__init__(app, fg_color=BG)
         apply_window_icon(self)
         self.after(300, lambda: apply_window_icon(self))
+        schedule_titlebar_style(self, BG)
         self.app = app
         self.title("Settings")
-        self.geometry("480x600")
+        self.geometry("480x640")
         self.resizable(False, False)
         self.transient(app)
         self.columnconfigure(0, weight=1)
@@ -249,18 +286,23 @@ class SettingsDialog(ctk.CTkToplevel):
         about.columnconfigure(1, weight=1)
         ctk.CTkLabel(about, text="ABOUT", font=app.f_section, text_color=ORANGE).grid(
             row=0, column=0, columnspan=2, sticky="w", padx=18, pady=(14, 8))
-        ctk.CTkLabel(about, image=app.img_logo_big, text="").grid(row=1, column=0, rowspan=3, padx=(18, 14), pady=(0, 14))
+        ctk.CTkLabel(about, image=app.img_logo_big, text="").grid(row=1, column=0, rowspan=4, padx=(18, 14), pady=(0, 14))
         ctk.CTkLabel(about, text=APP_NAME, font=app.f_bold_lg, text_color=FG, anchor="w").grid(row=1, column=1, sticky="w")
         ctk.CTkLabel(about, text=f"Version {APP_VERSION}", font=app.f_body, text_color=MUTED, anchor="w").grid(
             row=2, column=1, sticky="w")
         ctk.CTkLabel(about, text=f"Created by {APP_AUTHOR}", font=app.f_body, text_color=FG, anchor="w").grid(
-            row=3, column=1, sticky="w", pady=(0, 14))
+            row=3, column=1, sticky="w")
+        site = ctk.CTkLabel(about, text=APP_WEBSITE.split("://", 1)[-1].rstrip("/"), font=app.f_body,
+                            text_color=ORANGE, anchor="w", cursor="hand2")
+        site.grid(row=4, column=1, sticky="w", pady=(0, 14))
+        site.bind("<Button-1>", lambda e: webbrowser.open(APP_WEBSITE))
         links = ctk.CTkFrame(about, fg_color="transparent")
-        links.grid(row=4, column=0, columnspan=2, sticky="w", padx=18, pady=(0, 6))
-        app._ghost(links, "Developer profile", lambda: webbrowser.open(APP_URL), width=140).pack(side="left")
-        app._ghost(links, "Project page", lambda: webbrowser.open(APP_REPO), width=120).pack(side="left", padx=8)
+        links.grid(row=5, column=0, columnspan=2, sticky="w", padx=18, pady=(0, 6))
+        app._ghost(links, "Website", lambda: webbrowser.open(APP_WEBSITE), width=100).pack(side="left")
+        app._ghost(links, "GitHub", lambda: webbrowser.open(APP_URL), width=100).pack(side="left", padx=8)
+        app._ghost(links, "Project page", lambda: webbrowser.open(APP_REPO), width=120).pack(side="left")
         ctk.CTkLabel(about, text=f"Released under the {APP_LICENSE}.", font=app.f_small, text_color=MUTED).grid(
-            row=5, column=0, columnspan=2, sticky="w", padx=18, pady=(0, 16))
+            row=6, column=0, columnspan=2, sticky="w", padx=18, pady=(0, 16))
 
         app._primary(self, "Done", self.destroy, width=110).grid(row=3, column=0, sticky="e", padx=28, pady=(18, 0))
         self.after(150, self._focus)
@@ -363,6 +405,7 @@ class App(ctk.CTk):
         self.protocol("WM_DELETE_WINDOW", self.on_close)
         self.after(80, self.poll)
         self.after(300, lambda: apply_window_icon(self))
+        schedule_titlebar_style(self, TOOLBAR)
 
     # ───────────── reusable widgets ─────────────
     def _card(self, parent, **kw):
@@ -546,10 +589,10 @@ class App(ctk.CTk):
         row = ctk.CTkFrame(self.web_frame, fg_color="transparent")
         row.grid(row=1, column=0, sticky="ew", pady=(8, 6))
         row.grid_columnconfigure(0, weight=1)
-        self._entry(row, self.web_url, "https://example.com   or   http://localhost:3000").grid(
+        self._entry(row, self.web_url, "example.com   ·   https://www.example.com   ·   localhost:3000").grid(
             row=0, column=0, sticky="ew")
         self._ghost(row, "Paste", lambda: self.paste_into(self.web_url), width=90).grid(row=0, column=1, padx=(8, 0))
-        ctk.CTkLabel(self.web_frame, text="Works with any public website and with local development servers.",
+        ctk.CTkLabel(self.web_frame, text="https:// and www. are optional. Works with any public website and with local development servers.",
                      font=self.f_small, text_color=MUTED).grid(row=2, column=0, sticky="w")
 
         # app input
