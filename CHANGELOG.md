@@ -6,6 +6,9 @@ and this project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+- The application icon now appears in the Windows taskbar and title bar (CustomTkinter was replacing it with its own icon); the Settings window uses it too.
+
 ## [1.2.0] - 2026-09-30
 
 ### Added

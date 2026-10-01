@@ -76,6 +76,32 @@ def open_path(p):
         pass
 
 
+def set_windows_app_id():
+    """Give the process its own taskbar identity so Windows shows our icon (not python.exe's)."""
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("UsefFarahmand.SnapshotAll")
+        except Exception:
+            pass
+
+
+def apply_window_icon(win):
+    """Set the window / taskbar icon.
+
+    CustomTkinter installs its own icon 200 ms after a window opens unless iconbitmap() was
+    already called, so this must run immediately (and again later, to be safe).
+    """
+    try:
+        if sys.platform == "win32":
+            win.iconbitmap(str(asset("icon.ico")))
+        else:
+            win._icon_ref = tk.PhotoImage(file=str(asset("logo_64.png")))
+            win.iconphoto(True, win._icon_ref)
+    except Exception:
+        pass
+
+
 def settings_file():
     base = Path(os.environ.get("APPDATA") or (Path.home() / ".config"))
     return base / "SnapshotAll" / "settings.json"
@@ -186,6 +212,8 @@ class QWriter:
 class SettingsDialog(ctk.CTkToplevel):
     def __init__(self, app):
         super().__init__(app, fg_color=BG)
+        apply_window_icon(self)
+        self.after(300, lambda: apply_window_icon(self))
         self.app = app
         self.title("Settings")
         self.geometry("480x600")
@@ -259,7 +287,9 @@ class SettingsDialog(ctk.CTkToplevel):
 
 class App(ctk.CTk):
     def __init__(self):
+        set_windows_app_id()
         super().__init__(fg_color=BG)
+        apply_window_icon(self)
         self.title(f"{APP_NAME} - Screenshot Every Page & Screen")
         self.geometry("1100x740")
         self.minsize(1000, 680)
@@ -332,7 +362,7 @@ class App(ctk.CTk):
 
         self.protocol("WM_DELETE_WINDOW", self.on_close)
         self.after(80, self.poll)
-        self.after(300, self._set_icon)
+        self.after(300, lambda: apply_window_icon(self))
 
     # ───────────── reusable widgets ─────────────
     def _card(self, parent, **kw):
@@ -471,16 +501,6 @@ class App(ctk.CTk):
                 label.configure(text_color=MUTED, font=self.f_body)
             if line is not None:
                 line.configure(fg_color=ORANGE if i < n else BORDER)
-
-    def _set_icon(self):
-        try:
-            if sys.platform == "win32":
-                self.iconbitmap(default=str(asset("icon.ico")))
-            else:
-                self._icon_ref = tk.PhotoImage(file=str(asset("logo_64.png")))
-                self.iconphoto(True, self._icon_ref)
-        except Exception:
-            pass
 
     def open_settings(self):
         if self.settings_win is not None and self.settings_win.winfo_exists():
