@@ -45,7 +45,7 @@ jobs:
         run: |
           Get-FileHash Output\SnapshotAll_Setup.exe, SnapshotAll_Portable.zip -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  $(Split-Path $_.Path -Leaf)" } | Set-Content -Encoding ascii SHA256SUMS.txt
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: SnapshotAll_Setup
           path: Output/SnapshotAll_Setup.exe
