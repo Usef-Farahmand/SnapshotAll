@@ -6,6 +6,9 @@ and this project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- CI: pushes to `develop` and pull requests to `main` now build the app and keep the installer, portable zip and checksums as downloadable artifacts (14 days). Public GitHub Releases are still published only from `main` and from version tags. Release tags follow the app version (`v1.3.N`).
+
 ## [1.3.0] - 2026-10-02
 
 ### Added

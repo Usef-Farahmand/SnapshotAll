@@ -77,7 +77,7 @@ Browser tests for full-page capture live in `tests/` (`pip install playwright py
 3. Push and open a pull request against `main`; fill in the PR template.
 4. A maintainer will review it. Please respond to feedback — small follow-up commits are fine.
 
-Releases are built automatically by GitHub Actions when changes land on `main`.
+Pushes to `develop` and pull requests build the app too, but only as downloadable artifacts (Actions → the run → Artifacts). Releases are published automatically by GitHub Actions when changes land on `main` or a version tag is pushed.
 
 ## Questions?
 
