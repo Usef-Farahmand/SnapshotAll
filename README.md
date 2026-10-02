@@ -30,6 +30,7 @@
 - [Why SnapshotAll?](#why-snapshotall)
 - [How it works: four simple steps](#how-it-works-four-simple-steps)
 - [Supported sources](#supported-sources)
+- [GIF flows](#gif-flows)
 - [Download and install (Windows)](#download-and-install-windows)
 - [Command-line usage](#command-line-usage)
 - [Code signing](#code-signing)
@@ -51,7 +52,7 @@ Designers, QA engineers, developers and writers often need a visual record of *e
 | 1 | **Source** | Choose **Website** or **App** and enter its address (a URL, or an `.apk` / `.exe` / `.jar` file). |
 | 2 | **Settings** | Tune the options for that source: depth, limits, mobile mode, login session, and more. |
 | 3 | **Scan** | A progress bar runs while SnapshotAll explores the whole source. Every page or screen it finds appears right away as a **preview card** you can select or deselect. |
-| 4 | **Save** | Pick the save location. Only the screenshots you selected are saved. |
+| 4 | **Save** | Choose what to save — **screenshots (PNG)**, **GIF flows**, or both — and where. Only the pages you selected are saved. |
 
 <table>
 <tr>
@@ -84,6 +85,20 @@ The app has a modern dark-and-orange interface with a toolbar (**New capture**, 
 - **Android `.apk`** — installs the app on an emulator or USB phone, taps through the UI and captures every unique screen (with optional scrolling).
 - **Windows `.exe` / `.jar`** — launches the program (or attaches to a running window by title) and uses Windows UI Automation to click buttons, tabs, menu items and links, capturing every new window state and dialog.
 - Risky buttons (`delete`, `logout`, `pay`, `exit`, `save`, …) are skipped by default — configurable in Settings.
+
+## GIF flows
+
+Turn the scan into short animated walkthroughs. Each **flow** is a path through the site (or app) — from the start page to a page with nothing further down — and becomes **one GIF**. Every frame shows the page, and a caption underneath always tells you where you are:
+
+<div align="center"><img src="docs/sample-flow.gif" alt="Sample GIF flow: Home, Portfolio, Project A" width="640"></div>
+
+- **Caption:** the whole path with the current step highlighted (`Home › Portfolio › Project A`), the page's address (or the tap trail for apps), a step counter and progress dots.
+- **Choose what goes in:** flows are built from the pages you selected on the Scan step. If you deselect a page on the way, the flow skips it and carries on from the next one.
+- **Preview before saving:** the Save step lists the flows that will be created.
+- **Options:** seconds per step (default 1.6) and the maximum number of flows (default 12, deepest paths first). GIFs are written to a `flows` folder inside your save location.
+- **Command line:** add `--gif` (plus `--gif-seconds` and `--max-flows`).
+
+A flow follows how SnapshotAll *discovered* the pages (the first link it found), which is not always the path a visitor would take. If every page is linked from the home page you will mostly get two-step flows.
 
 ## Download and install (Windows)
 
@@ -124,6 +139,9 @@ python snapshot_all.py --attach "Untitled - Notepad"
 | `--width`, `--height` | web | `1440`, `900` | Viewport size |
 | `--mobile` | web | off | Emulate a phone (iPhone 13) |
 | `--keep-floating` | web | off | Don't move or hide fixed / sticky bars (footers, cookie banners, chat bubbles) |
+| `--gif` | all | off | Also create one GIF per flow in `<out>/flows` |
+| `--gif-seconds` | all | `1.6` | Seconds each step is shown in a GIF |
+| `--max-flows` | all | `12` | Maximum number of GIF flows |
 | `--storage-state` | web | – | Playwright session file for logged-in pages |
 | `--max-screens` | apps | `40` | Maximum screens / window states |
 | `--max-clicks` | apps | `25` | Max tappable elements tried per screen |
@@ -176,6 +194,7 @@ SnapshotAll/
 ├── snapshot_gui.py        # desktop app: wizard UI (customtkinter)
 ├── snapshot_all.py        # CLI + website and Android engines
 ├── snapshot_desktop.py    # Windows app engine (UI Automation)
+├── snapshot_gif.py        # GIF flows: builds flows and renders captioned GIFs
 ├── snapshot_common.py     # shared helpers, app name / version / author / website
 ├── assets/                # logo and icons
 ├── docs/                  # README images

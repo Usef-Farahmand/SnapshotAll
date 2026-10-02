@@ -4,7 +4,7 @@ import threading
 from pathlib import Path
 
 APP_NAME = "SnapshotAll"
-APP_VERSION = "1.2.2"
+APP_VERSION = "1.3.0"
 APP_AUTHOR = "Usef Farahmand"
 APP_URL = "https://github.com/Usef-Farahmand"
 APP_WEBSITE = "https://www.useffarahmand.com/"
@@ -17,12 +17,18 @@ STOP = threading.Event()  # set by the GUI to stop a running job
 DEFAULT_AVOID = r"delete|remove|log ?out|sign ?out|uninstall|pay|buy|purchase|checkout|reset|erase|wipe"
 
 
-def emit(a, path, label=""):
-    """Tell the GUI (if any) that a new screenshot exists: a.on_item(path, label)."""
+def emit(a, path, label="", parent=None, title="", kind="screen"):
+    """Tell the GUI (if any) that a new screenshot exists.
+
+    label   unique name of the page / screen (URL for websites, tap trail for apps)
+    parent  label of the page / screen it was reached from (None for the start)
+    title   short human name: the text of the link / button that led here
+    kind    "screen" for a page or screen, "scroll" for an extra scrolled capture
+    """
     cb = getattr(a, "on_item", None)
     if cb:
         try:
-            cb(Path(path), label)
+            cb(Path(path), label, parent, title, kind)
         except Exception:
             pass
 

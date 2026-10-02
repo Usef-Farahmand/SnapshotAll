@@ -218,7 +218,7 @@ def run_web(target, out: Path, a):
         ctx = browser.new_context(ignore_https_errors=True, **kw)
         page = ctx.new_page()
 
-        queue = deque([(normalize(start_url), 0)])
+        queue = deque([(normalize(start_url), 0, None, "")])  # (url, depth, parent url, link text)
         seen = {page_key(start_url)}
 
         def goto_page(url, first):
@@ -241,13 +241,13 @@ def run_web(target, out: Path, a):
                     if (site_key(urlparse(n).netloc) == origin_key and page_key(n) not in seen
                             and not SKIP_EXT.search(urlparse(n).path)):
                         seen.add(page_key(n))
-                        queue.append((n, 1))
+                        queue.append((n, 1, normalize(start_url), ""))
         except Exception:
             pass
 
         count = 0
         while queue and count < a.max_pages and not STOP.is_set():
-            url, depth = queue.popleft()
+            url, depth, parent, link_text = queue.popleft()
             try:
                 goto_page(url, count == 0)
                 if count == 0 and page.url.startswith(("http://", "https://")):
@@ -269,19 +269,26 @@ def run_web(target, out: Path, a):
                 path = urlparse(url)
                 name = f"{count:03d}_{slugify((path.path or '/') + ('?' + path.query if path.query else '') + ('#' + path.fragment if path.fragment else ''))}.png"
                 page.screenshot(path=str(out / name), full_page=True)
-                emit(a, out / name, url)
+                try:
+                    page_title = (page.title() or "").strip()
+                except Exception:
+                    page_title = ""
+                emit(a, out / name, url, parent=parent, title=link_text or page_title)
                 print(f"[{count}] {url}")
 
                 if depth < a.max_depth:
-                    hrefs = page.eval_on_selector_all("a[href]", "els => els.map(e => e.href)")
-                    for h in hrefs:
+                    links = page.eval_on_selector_all(
+                        "a[href]",
+                        "els => els.map(e => [e.href, (e.innerText || e.getAttribute('aria-label') || e.title || '')"
+                        ".trim().replace(/\\s+/g, ' ')])")
+                    for h, text in links:
                         if not h.startswith(("http://", "https://")):
                             continue
                         n = normalize(h)
                         if (site_key(urlparse(n).netloc) == origin_key and page_key(n) not in seen
                                 and not SKIP_EXT.search(urlparse(n).path)):
                             seen.add(page_key(n))
-                            queue.append((n, depth + 1))
+                            queue.append((n, depth + 1, url, text[:60]))
             except Exception as e:
                 print(f"  ! Error on {url}: {e}")
 
@@ -379,7 +386,8 @@ def run_apk(apk, out: Path, a):
         name = f"{shots:03d}_{slugify(label, 30)}.png"
         d.screenshot(str(out / name))
         trail = " > ".join(p[2] for p in path) or "home"
-        emit(a, out / name, trail)
+        emit(a, out / name, trail, parent=(" > ".join(p[2] for p in path[:-1]) or "home") if path else None,
+             title=label)
         print(f"[{shots}] {trail}")
 
         if a.scroll and d(scrollable=True).exists:
@@ -392,7 +400,7 @@ def run_apk(apk, out: Path, a):
                     break
                 sname = f"{shots:03d}_{slugify(label, 30)}_scroll{i + 1}.png"
                 d.screenshot(str(out / sname))
-                emit(a, out / sname, f"{trail} (scroll {i + 1})")
+                emit(a, out / sname, f"{trail} (scroll {i + 1})", kind="scroll")
                 prev = cur
 
         if len(path) < a.max_depth:
@@ -423,6 +431,10 @@ def main():
                     help="website URL, or an .apk / .exe / .jar file")
     ap.add_argument("--mode", choices=["auto", "web", "apk", "desktop"], default="auto")
     ap.add_argument("-o", "--out", help="output folder")
+    ap.add_argument("--gif", action="store_true",
+                    help="also create one GIF per navigation flow (in <out>/flows), captioned with where you are")
+    ap.add_argument("--gif-seconds", type=float, default=1.6, help="seconds each step is shown in a GIF")
+    ap.add_argument("--max-flows", type=int, default=12, help="maximum number of GIF flows")
     ap.add_argument("--max-depth", type=int, default=None, help="crawl depth (web 5, apk 3, desktop 2)")
     ap.add_argument("--delay", type=float, default=1.0, help="wait after each load/tap (seconds)")
     # web
@@ -457,6 +469,10 @@ def main():
     out = Path(a.out or f"screenshots_{slugify(stem, 30)}_{stamp}")
     out.mkdir(parents=True, exist_ok=True)
 
+    collected = []
+    if a.gif:
+        a.on_item = lambda path, label, parent, title, kind: collected.append(
+            {"path": path, "label": label, "parent": parent, "title": title, "kind": kind})
     if mode == "web":
         run_web(a.target, out, a)
     elif mode == "apk":
@@ -464,6 +480,11 @@ def main():
     else:
         from snapshot_desktop import run_desktop
         run_desktop(a.target, out, a)
+    if a.gif:
+        from snapshot_gif import export_flows
+        made = export_flows(collected, out / "flows", seconds_per_step=a.gif_seconds, max_flows=a.max_flows,
+                            progress=lambda n, total, crumbs: print(f"GIF {n}/{total}: {crumbs}"))
+        print(f"Created {len(made)} GIF flow(s) in {out / 'flows'}")
     print(f"Saved to {out}")
 
 

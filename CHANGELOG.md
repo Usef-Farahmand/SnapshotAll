@@ -6,6 +6,15 @@ and this project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-10-02
+
+### Added
+- **GIF flows**: one animated GIF per navigation flow (a path from the start page / home screen to a page with nothing further down). Each frame shows the page with a caption of the whole path, the current step highlighted, the page address and a step counter.
+- Save step: choose **Screenshots (PNG)**, **GIF flows** or both, with seconds per step, a maximum number of flows and a preview of the flows that will be created. The Save button now lives in the footer so it is always visible.
+- Command line: `--gif`, `--gif-seconds`, `--max-flows`.
+- The engines now report how each page was reached (parent page and link text; tap trail for apps).
+- Unit tests for flows (`tests/test_flows.py`).
+
 ## [1.2.2] - 2026-10-01
 
 ### Fixed

@@ -32,6 +32,7 @@ from PIL import Image, ImageOps
 
 import snapshot_all as sa
 import snapshot_desktop as sd
+import snapshot_gif as sgif
 from snapshot_common import APP_AUTHOR, APP_LICENSE, APP_NAME, APP_REPO, APP_URL, APP_VERSION, APP_WEBSITE
 
 # ── Dark + orange theme ─────────────────────────────────────────────
@@ -395,6 +396,10 @@ class App(ctk.CTk):
         self.package = tk.StringVar()
         self.avoid = tk.StringVar(value=sa.DEFAULT_AVOID)
         self.save_dir = tk.StringVar(value=self.settings["save_dir"])
+        self.save_png = tk.BooleanVar(value=True)
+        self.make_gif = tk.BooleanVar(value=False)
+        self.gif_seconds = tk.StringVar(value="1.6")
+        self.gif_max = tk.StringVar(value="12")
 
         self.grid_rowconfigure(2, weight=1)
         self.grid_columnconfigure(0, weight=1)
@@ -425,7 +430,8 @@ class App(ctk.CTk):
                              text_color=FG, text_color_disabled="#6E6259", font=self.f_body, **kw)
 
     def _entry(self, parent, var, placeholder="", **kw):
-        e = ctk.CTkEntry(parent, textvariable=var, height=42, corner_radius=10, fg_color=FIELD,
+        kw.setdefault("height", 42)
+        e = ctk.CTkEntry(parent, textvariable=var, corner_radius=10, fg_color=FIELD,
                          border_color=BORDER, border_width=1, text_color=FG, font=self.f_body, **kw)
         add_edit_support(e)
         if placeholder:  # CTkEntry ignores placeholder_text when a textvariable is used, so draw our own
@@ -912,21 +918,22 @@ class App(ctk.CTk):
             sys.stdout, sys.stderr = old
             self.q.put(("done", failed))
 
-    def _on_item(self, path, label):  # called from the worker thread
+    def _on_item(self, path, label, parent=None, title="", kind="screen"):  # called from the worker thread
         try:
             thumb = make_thumb(path)
         except Exception:
             thumb = None
-        self.q.put(("item", path, label, thumb))
+        self.q.put(("item", path, label, thumb, parent, title, kind))
 
-    def _add_card(self, path, label, thumb):
+    def _add_card(self, path, label, thumb, parent=None, title="", kind="screen"):
         if self.bar.cget("mode") == "indeterminate":
             self.bar.stop()
             self.bar.configure(mode="determinate")
         idx = len(self.items) + 1
         var = tk.BooleanVar(value=True)
         card = ctk.CTkFrame(self.scroll_frame, fg_color=PANEL, corner_radius=14, border_width=2, border_color=ORANGE)
-        item = {"path": Path(path), "label": label, "var": var, "card": card}
+        item = {"path": Path(path), "label": label, "var": var, "card": card,
+                "parent": parent, "title": title, "kind": kind}
         if thumb is not None:
             item["img"] = ctk.CTkImage(light_image=thumb, dark_image=thumb, size=thumb.size)
             pic = ctk.CTkLabel(card, image=item["img"], text="")
@@ -1008,10 +1015,13 @@ class App(ctk.CTk):
         self.save_form.grid()
         self.save_done.grid_remove()
         n = len(self.selected())
-        self.save_summary.configure(text=f"{n} screenshot{'s' if n != 1 else ''} will be saved")
-        self.save_btn.configure(text=f"Save {n} screenshot{'s' if n != 1 else ''}", state="normal")
+        self.save_summary.configure(text=f"{n} {'screenshot' if n == 1 else 'screenshots'} selected")
         self.save_err.configure(text="")
+        self.save_status.configure(text="")
         self.save_dir.set(self.settings["save_dir"])
+        self.save_btn.grid()
+        self.save_btn.configure(state="normal")
+        self._refresh_save_ui()
         self.go(3)
 
     def _scan_done(self, failed):
@@ -1065,32 +1075,66 @@ class App(ctk.CTk):
         self.clipboard_append("".join(self.buf))
 
     # ───────────── page 3: save ─────────────
+    def _switch(self, parent, text, var, command):
+        return ctk.CTkSwitch(parent, text=text, variable=var, onvalue=True, offvalue=False, command=command,
+                             progress_color=ORANGE, button_color=FG, button_hover_color=FG, fg_color=FIELD,
+                             text_color=FG, font=self.f_body)
+
     def _build_save_page(self):
         page = self.pages[3]
-        self._header(page, "Save your screenshots", "Choose where the selected screenshots should be saved.")
-        body = ctk.CTkFrame(page, fg_color="transparent")
-        body.grid(row=1, column=0, sticky="nsew", padx=36)
+        self._header(page, "Save your results", "Choose what to save and where.")
+        body = ctk.CTkScrollableFrame(page, fg_color="transparent", scrollbar_button_color=BORDER,
+                                      scrollbar_button_hover_color=ORANGE)
+        body.grid(row=1, column=0, sticky="nsew", padx=(36, 24))
         body.grid_columnconfigure(0, weight=1)
 
-        self.save_form = self._card(body)
-        self.save_form.grid(row=0, column=0, sticky="ew")
-        self.save_form.grid_columnconfigure(0, weight=1)
-        self.save_summary = ctk.CTkLabel(self.save_form, text="", font=self.f_bold_lg, text_color=FG, anchor="w")
-        self.save_summary.grid(row=0, column=0, sticky="w", padx=24, pady=(22, 4))
-        ctk.CTkLabel(self.save_form, text="SAVE LOCATION", font=self.f_section, text_color=ORANGE).grid(
-            row=1, column=0, sticky="w", padx=24, pady=(14, 0))
-        row = ctk.CTkFrame(self.save_form, fg_color="transparent")
-        row.grid(row=2, column=0, sticky="ew", padx=24, pady=(8, 6))
+        f = self.save_form = self._card(body)
+        f.grid(row=0, column=0, sticky="ew", padx=(0, 12))
+        f.grid_columnconfigure(0, weight=1)
+        self.save_summary = ctk.CTkLabel(f, text="", font=self.f_bold_lg, text_color=FG, anchor="w")
+        self.save_summary.grid(row=0, column=0, sticky="w", padx=24, pady=(22, 0))
+
+        ctk.CTkLabel(f, text="WHAT TO SAVE", font=self.f_section, text_color=ORANGE).grid(
+            row=1, column=0, sticky="w", padx=24, pady=(16, 0))
+        opts = ctk.CTkFrame(f, fg_color="transparent")
+        opts.grid(row=2, column=0, sticky="w", padx=24, pady=(10, 4))
+        self._switch(opts, "Screenshots (PNG)", self.save_png, self._refresh_save_ui).grid(row=0, column=0, padx=(0, 32))
+        self._switch(opts, "GIF flows", self.make_gif, self._on_gif_toggle).grid(row=0, column=1)
+
+        self.gif_frame = ctk.CTkFrame(f, fg_color=PANEL_H, corner_radius=12)
+        self.gif_frame.grid(row=3, column=0, sticky="ew", padx=24, pady=(8, 4))
+        self.gif_frame.grid_columnconfigure(0, weight=1)
+        ctk.CTkLabel(self.gif_frame, justify="left", anchor="w", wraplength=620, font=self.f_small, text_color=MUTED,
+                     text="One GIF per flow: a path of pages from the start page to a page with nothing further "
+                          "down. Every frame shows the page, with a caption telling you where you are."
+                     ).grid(row=0, column=0, sticky="w", padx=16, pady=(14, 8))
+        nums = ctk.CTkFrame(self.gif_frame, fg_color="transparent")
+        nums.grid(row=1, column=0, sticky="w", padx=16)
+        for col, (label, var) in enumerate((("Seconds per step", self.gif_seconds), ("Max flows", self.gif_max))):
+            ctk.CTkLabel(nums, text=label, font=self.f_small, text_color=MUTED).grid(row=0, column=col * 2, padx=(0, 8))
+            self._entry(nums, var, width=80, height=34).grid(row=0, column=col * 2 + 1, padx=(0, 24))
+        self.flow_preview = ctk.CTkLabel(self.gif_frame, text="", justify="left", anchor="w", wraplength=620,
+                                         font=self.f_small, text_color=FG)
+        self.flow_preview.grid(row=2, column=0, sticky="w", padx=16, pady=(10, 14))
+        self.gif_frame.grid_remove()
+        self.gif_max.trace_add("write", lambda *_: self._refresh_save_ui())
+
+        ctk.CTkLabel(f, text="SAVE LOCATION", font=self.f_section, text_color=ORANGE).grid(
+            row=4, column=0, sticky="w", padx=24, pady=(16, 0))
+        row = ctk.CTkFrame(f, fg_color="transparent")
+        row.grid(row=5, column=0, sticky="ew", padx=24, pady=(8, 6))
         row.grid_columnconfigure(0, weight=1)
         self._entry(row, self.save_dir, "Choose a folder").grid(row=0, column=0, sticky="ew")
         self._ghost(row, "Browse…", self.pick_save, width=100).grid(row=0, column=1, padx=(8, 0))
-        self.save_err = ctk.CTkLabel(self.save_form, text="", font=self.f_body, text_color=DANGER, anchor="w")
-        self.save_err.grid(row=3, column=0, sticky="w", padx=24)
-        self.save_btn = self._primary(self.save_form, "Save", self.do_save, width=220)
-        self.save_btn.grid(row=4, column=0, sticky="w", padx=24, pady=(10, 24))
+        self.save_err = ctk.CTkLabel(f, text="", font=self.f_body, text_color=DANGER, anchor="w", justify="left",
+                                     wraplength=640)
+        self.save_err.grid(row=6, column=0, sticky="w", padx=24)
+        self.save_status = ctk.CTkLabel(f, text="", font=self.f_small, text_color=MUTED, anchor="w")
+        self.save_status.grid(row=7, column=0, sticky="w", padx=24)
+        ctk.CTkFrame(f, height=16, fg_color="transparent").grid(row=8, column=0)   # bottom padding
 
         self.save_done = self._card(body)
-        self.save_done.grid(row=0, column=0, sticky="ew")
+        self.save_done.grid(row=0, column=0, sticky="ew", padx=(0, 12))
         self.save_done.grid_columnconfigure(0, weight=1)
         badge, _ = self._circle(self.save_done, "✓", size=64, fg=OK, text_color="#052E16",
                                 font=ctk.CTkFont(size=32, weight="bold"))
@@ -1104,40 +1148,115 @@ class App(ctk.CTk):
         self._primary(btns, "Open folder", lambda: open_path(self.saved_dir), width=150).pack(side="left")
         self._ghost(btns, "Capture something else", self.reset_all, width=200).pack(side="left", padx=10)
         self.save_done.grid_remove()
-        back, nxt = self._footer(page, lambda: self.go(2), "Finish", self.reset_all)
-        nxt.grid_remove()
+        # the main action lives in the footer so it is always visible, even with the GIF panel open
+        _back, self.save_btn = self._footer(page, lambda: self.go(2), "Save", self.do_save)
+        self.save_btn.configure(width=250)
 
     def pick_save(self):
         f = filedialog.askdirectory()
         if f:
             self.save_dir.set(f)
 
+    def _current_flows(self):
+        return sgif.build_flows(self.selected(), all_items=self.items, max_flows=self._num(self.gif_max, 12, lo=1))
+
+    def _on_gif_toggle(self):
+        if self.make_gif.get():
+            self.gif_frame.grid()
+        else:
+            self.gif_frame.grid_remove()
+        self._refresh_save_ui()
+
+    def _refresh_save_ui(self, *_):
+        """Update the flow preview and the label of the Save button."""
+        if not hasattr(self, "save_btn"):
+            return
+        n = len(self.selected())
+        png, gif = self.save_png.get(), self.make_gif.get()
+        flows = self._current_flows() if gif else []
+        if gif:
+            lines = sgif.describe_flows(flows)
+            if flows:
+                text = f"{len(flows)} GIF{'s' if len(flows) != 1 else ''} will be created in a “flows” folder:\n"
+                text += "\n".join(f"{i}.   {line}" for i, line in enumerate(lines[:6], 1))
+                if len(lines) > 6:
+                    text += f"\n… and {len(lines) - 6} more"
+            else:
+                text = ("No flows can be created from this selection. A flow needs at least two connected "
+                        "pages or screens: a page and one that is reached from it.")
+            self.flow_preview.configure(text=text)
+        if png and gif:
+            label = "Save screenshots + GIFs"
+        elif gif:
+            label = f"Create {len(flows)} GIF{'s' if len(flows) != 1 else ''}"
+        elif png:
+            label = f"Save {n} screenshot{'s' if n != 1 else ''}"
+        else:
+            label = "Save"
+        if str(self.save_btn.cget("state")) == "normal":
+            self.save_btn.configure(text=label)
+
     def do_save(self):
-        chosen = self.selected()
         raw = self.save_dir.get().strip()
+        png, gif = self.save_png.get(), self.make_gif.get()
+        if not png and not gif:
+            self.save_err.configure(text="Turn on Screenshots (PNG), GIF flows, or both.")
+            return
         if not raw:
             self.save_err.configure(text="Choose a folder first.")
             return
-        dest = Path(raw).expanduser()
+        if gif and not png and not self._current_flows():
+            self.save_err.configure(text="No GIF flows can be created from this selection.")
+            return
+        keys = ("path", "label", "parent", "title", "kind")
+        chosen = [{k: it[k] for k in keys} for it in self.selected()]
+        everything = [{k: it[k] for k in keys} for it in self.items]
+        self.save_err.configure(text="")
+        self.save_status.configure(text="Saving…")
+        self.save_btn.configure(state="disabled", text="Saving…")
+        threading.Thread(
+            target=self._save_worker,
+            args=(Path(raw).expanduser(), chosen, everything, png, gif,
+                  self._num(self.gif_seconds, 1.6, float, lo=0.2), self._num(self.gif_max, 12, lo=1)),
+            daemon=True).start()
+
+    def _save_worker(self, dest, chosen, everything, png, gif, seconds, max_flows):
         try:
             dest.mkdir(parents=True, exist_ok=True)
-            count = 0
-            for it in chosen:
-                target = dest / it["path"].name
-                k = 1
-                while target.exists():
-                    target = dest / f"{it['path'].stem} ({k}){it['path'].suffix}"
-                    k += 1
-                shutil.copy2(it["path"], target)
-                count += 1
+            copied = 0
+            if png:
+                for it in chosen:
+                    target = dest / it["path"].name
+                    k = 1
+                    while target.exists():
+                        target = dest / f"{it['path'].stem} ({k}){it['path'].suffix}"
+                        k += 1
+                    shutil.copy2(it["path"], target)
+                    copied += 1
+            made = []
+            if gif:
+                def progress(n, total, crumbs):
+                    self.q.put(("save_progress", f"Creating GIF {n} of {total}…"))
+                made = sgif.export_flows(chosen, dest / "flows", all_items=everything,
+                                         seconds_per_step=seconds, max_flows=max_flows, progress=progress)
+            self.q.put(("save_done", copied, len(made), str(dest)))
         except Exception as e:
-            self.save_err.configure(text=f"Could not save: {e}")
-            return
-        self.settings["save_dir"] = str(dest)
+            self.q.put(("save_error", str(e)))
+
+    def _save_done(self, copied, gifs, dest):
+        self.settings["save_dir"] = dest
         store_settings(self.settings)
-        self.saved_dir = dest
-        self.done_title.configure(text=f"Saved {count} screenshot{'s' if count != 1 else ''}")
-        self.done_path.configure(text=str(dest))
+        self.saved_dir = Path(dest)
+        parts = []
+        if copied:
+            parts.append(f"{copied} screenshot{'s' if copied != 1 else ''}")
+        if gifs:
+            parts.append(f"{gifs} GIF flow{'s' if gifs != 1 else ''}")
+        self.done_title.configure(text=("Saved " if copied else "Created ") + " and ".join(parts))
+        self.done_path.configure(text=dest + ("   (GIFs are in the “flows” folder)" if gifs else ""))
+        self.save_btn.configure(state="normal")
+        self.save_btn.grid_remove()
+        self.save_status.configure(text="")
         self.save_form.grid_remove()
         self.save_done.grid()
         if self.settings.get("open_after_save"):
@@ -1170,7 +1289,7 @@ class App(ctk.CTk):
                 msg = self.q.get_nowait()
                 kind = msg[0]
                 if kind == "item":
-                    self._add_card(msg[1], msg[2], msg[3])
+                    self._add_card(*msg[1:])
                 elif kind == "log":
                     text = msg[1]
                     line = text.strip().splitlines()[-1] if text.strip() else ""
@@ -1183,6 +1302,15 @@ class App(ctk.CTk):
                         self.details.configure(state="disabled")
                 elif kind == "done":
                     self._scan_done(msg[1])
+                elif kind == "save_progress":
+                    self.save_status.configure(text=msg[1])
+                elif kind == "save_done":
+                    self._save_done(msg[1], msg[2], msg[3])
+                elif kind == "save_error":
+                    self.save_err.configure(text=f"Could not save: {msg[1]}")
+                    self.save_status.configure(text="")
+                    self.save_btn.configure(state="normal")
+                    self._refresh_save_ui()
         except queue.Empty:
             pass
         self._maybe_reflow()

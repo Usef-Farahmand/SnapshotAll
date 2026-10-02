@@ -21,6 +21,10 @@ jobs:
           ruff check --select E9,F63,F7,F82 .
       - name: Smoke test CLI
         run: python snapshot_all.py --help
+      - name: Unit tests (GIF flows)
+        run: |
+          pip install pillow pytest
+          python -m pytest tests/test_flows.py -q
   browser-tests:
     runs-on: ubuntu-latest
     steps:
