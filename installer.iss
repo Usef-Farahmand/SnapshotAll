@@ -1,6 +1,6 @@
 [Setup]
 AppName=SnapshotAll
-AppVersion=1.3.0
+AppVersion=1.4.0
 AppPublisher=Usef Farahmand
 AppPublisherURL=https://www.useffarahmand.com/
 AppSupportURL=https://github.com/Usef-Farahmand/SnapshotAll/issues

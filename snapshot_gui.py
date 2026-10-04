@@ -33,6 +33,7 @@ from PIL import Image, ImageOps
 import snapshot_all as sa
 import snapshot_desktop as sd
 import snapshot_gif as sgif
+import snapshot_live as slive
 from snapshot_common import APP_AUTHOR, APP_LICENSE, APP_NAME, APP_REPO, APP_URL, APP_VERSION, APP_WEBSITE
 
 # ── Dark + orange theme ─────────────────────────────────────────────
@@ -50,9 +51,10 @@ ORANGE_H = "#FB923C"
 ON_ORANGE = "#1A0E05"
 DANGER = "#F87171"
 OK = "#4ADE80"
+FAINT_TEXT = "#6E6259"
 
 THUMB = (224, 140)
-STEPS = ["Source", "Settings", "Scan", "Save"]
+STEPS = ["Source", "Settings", "Scan", "Flows", "Save"]
 
 ctk.set_appearance_mode("dark")
 
@@ -399,7 +401,15 @@ class App(ctk.CTk):
         self.save_png = tk.BooleanVar(value=True)
         self.make_gif = tk.BooleanVar(value=False)
         self.gif_seconds = tk.StringVar(value="1.6")
-        self.gif_max = tk.StringVar(value="12")
+        self.gif_style = tk.StringVar(value="Slideshow")
+        self.gif_quality = tk.StringVar(value="Standard")
+        self.gif_wm = tk.BooleanVar(value=True)
+        self.flow_steps = tk.StringVar(value="5")
+        self.flow_max = tk.StringVar(value="12")
+        self.flows = []             # editable flows: {"on": BooleanVar, "steps": [item labels]}
+        self._flows_sig = None      # selection the flows were generated from
+        self._flow_imgs = []
+        self.scan_ns = None         # settings of the last scan (used by live recording)
 
         self.grid_rowconfigure(2, weight=1)
         self.grid_columnconfigure(0, weight=1)
@@ -524,13 +534,14 @@ class App(ctk.CTk):
         self.content.grid_rowconfigure(0, weight=1)
         self.content.grid_columnconfigure(0, weight=1)
         self.pages = []
-        for _ in range(4):
+        for _ in range(5):
             p = ctk.CTkFrame(self.content, fg_color=BG, corner_radius=0)
             p.grid(row=0, column=0, sticky="nsew")
             self.pages.append(p)
         self._build_source_page()
         self._build_settings_page()
         self._build_scan_page()
+        self._build_flows_page()
         self._build_save_page()
 
     def go(self, n):
@@ -872,6 +883,7 @@ class App(ctk.CTk):
         self.temp = Path(tempfile.mkdtemp(prefix="snapshotall_"))
         is_web = mode == "web"
         self.limit = self._num(self.max_pages if is_web else self.max_screens, 50 if is_web else 40, lo=1)
+        self.flows, self._flows_sig = [], None
         self.noun = "pages" if is_web else "screens"
         ns = argparse.Namespace(
             max_depth=self._num(self.depth_web if is_web else self.depth_app, 5 if is_web else 3),
@@ -885,6 +897,7 @@ class App(ctk.CTk):
             on_item=self._on_item,
         )
         runner = {"web": sa.run_web, "apk": sa.run_apk, "desktop": sd.run_desktop}[mode]
+        self.scan_ns = ns
         self._reset_scan_ui()
         self.scan_sub.configure(text=f"{label}")
         self.scanning = True
@@ -918,22 +931,22 @@ class App(ctk.CTk):
             sys.stdout, sys.stderr = old
             self.q.put(("done", failed))
 
-    def _on_item(self, path, label, parent=None, title="", kind="screen"):  # called from the worker thread
+    def _on_item(self, path, label, parent=None, title="", kind="screen", links=None):  # worker thread
         try:
             thumb = make_thumb(path)
         except Exception:
             thumb = None
-        self.q.put(("item", path, label, thumb, parent, title, kind))
+        self.q.put(("item", path, label, thumb, parent, title, kind, links or []))
 
-    def _add_card(self, path, label, thumb, parent=None, title="", kind="screen"):
+    def _add_card(self, path, label, thumb, parent=None, title="", kind="screen", links=None):
         if self.bar.cget("mode") == "indeterminate":
             self.bar.stop()
             self.bar.configure(mode="determinate")
         idx = len(self.items) + 1
         var = tk.BooleanVar(value=True)
         card = ctk.CTkFrame(self.scroll_frame, fg_color=PANEL, corner_radius=14, border_width=2, border_color=ORANGE)
-        item = {"path": Path(path), "label": label, "var": var, "card": card,
-                "parent": parent, "title": title, "kind": kind}
+        item = {"path": Path(path), "label": label, "var": var, "card": card, "thumb": thumb,
+                "parent": parent, "title": title, "kind": kind, "links": links or []}
         if thumb is not None:
             item["img"] = ctk.CTkImage(light_image=thumb, dark_image=thumb, size=thumb.size)
             pic = ctk.CTkLabel(card, image=item["img"], text="")
@@ -1011,17 +1024,10 @@ class App(ctk.CTk):
     def scan_next(self):
         if not self.selected():
             return
-        self.saved_dir = None
-        self.save_form.grid()
-        self.save_done.grid_remove()
-        n = len(self.selected())
-        self.save_summary.configure(text=f"{n} {'screenshot' if n == 1 else 'screenshots'} selected")
-        self.save_err.configure(text="")
-        self.save_status.configure(text="")
-        self.save_dir.set(self.settings["save_dir"])
-        self.save_btn.grid()
-        self.save_btn.configure(state="normal")
-        self._refresh_save_ui()
+        signature = tuple(it["label"] for it in self.selected())
+        if signature != self._flows_sig:             # keep the user's edits while the selection is unchanged
+            self._generate_flows()
+        self._render_flows()
         self.go(3)
 
     def _scan_done(self, failed):
@@ -1074,14 +1080,176 @@ class App(ctk.CTk):
         self.clipboard_clear()
         self.clipboard_append("".join(self.buf))
 
-    # ───────────── page 3: save ─────────────
+    # ───────────── page 3: flows ─────────────
+    def _build_flows_page(self):
+        page = self.pages[3]
+        self._header(page, "Review your flows",
+                     "Each flow becomes one GIF. Reorder or remove steps, add pages, or build your own flow.")
+        body = ctk.CTkFrame(page, fg_color="transparent")
+        body.grid(row=1, column=0, sticky="nsew", padx=36)
+        body.grid_columnconfigure(0, weight=1)
+        body.grid_rowconfigure(1, weight=1)
+        tools = ctk.CTkFrame(body, fg_color="transparent")
+        tools.grid(row=0, column=0, sticky="ew", pady=(0, 8))
+        for label, var in (("Steps per flow", self.flow_steps), ("Max flows", self.flow_max)):
+            ctk.CTkLabel(tools, text=label, font=self.f_small, text_color=MUTED).pack(side="left", padx=(0, 8))
+            self._entry(tools, var, width=60, height=34).pack(side="left", padx=(0, 18))
+        self._ghost(tools, "Regenerate", self._regen_flows, width=110, height=34).pack(side="left", padx=(0, 8))
+        self._ghost(tools, "+ New flow", self._new_flow, width=110, height=34).pack(side="left")
+        self.flow_count = ctk.CTkLabel(tools, text="", font=self.f_body, text_color=FG)
+        self.flow_count.pack(side="right")
+        self.flow_list = ctk.CTkScrollableFrame(body, fg_color="transparent", scrollbar_button_color=BORDER,
+                                                scrollbar_button_hover_color=ORANGE)
+        self.flow_list.grid(row=1, column=0, sticky="nsew")
+        self.flow_list.grid_columnconfigure(0, weight=1)
+        self._footer(page, lambda: self.go(2), "Next  →", self.flows_next)
+
+    def _items_by_label(self):
+        return {it["label"]: it for it in self.selected() if it["kind"] == "screen"}
+
+    def _generate_flows(self):
+        flows = sgif.build_flows(self.selected(), all_items=self.items,
+                                 max_flows=self._num(self.flow_max, 12, lo=1),
+                                 target_steps=self._num(self.flow_steps, 5, lo=2))
+        self.flows = [{"on": tk.BooleanVar(value=True), "steps": [it["label"] for it in f]} for f in flows]
+        self._flows_sig = tuple(it["label"] for it in self.selected())
+
+    def _regen_flows(self):
+        self._generate_flows()
+        self._render_flows()
+
+    def _new_flow(self):
+        by = self._items_by_label()
+        if not by:
+            return
+        self.flows.append({"on": tk.BooleanVar(value=True), "steps": [next(iter(by))]})
+        self._render_flows()
+
+    def _remove_flow(self, fi):
+        del self.flows[fi]
+        self._render_flows()
+
+    def _remove_step(self, fi, si):
+        del self.flows[fi]["steps"][si]
+        self._render_flows()
+
+    def _move_step(self, fi, si, delta):
+        steps = self.flows[fi]["steps"]
+        j = si + delta
+        if 0 <= j < len(steps):
+            steps[si], steps[j] = steps[j], steps[si]
+            self._render_flows()
+
+    def _add_step(self, fi, label):
+        self.flows[fi]["steps"].append(label)
+        self._render_flows()
+
+    def _add_page_menu(self, fi, button):
+        present = set(self.flows[fi]["steps"])
+        menu = tk.Menu(self, tearoff=0, bg=FIELD, fg=FG, activebackground=ORANGE, activeforeground=ON_ORANGE,
+                       bd=0, relief="flat")
+        n = 0
+        for i, (label, _it) in enumerate(self._items_by_label().items(), 1):
+            if label in present:
+                continue
+            menu.add_command(label=f"{i}.  {short_label(label, 40)}", columnbreak=(n > 0 and n % 18 == 0),
+                             command=lambda lb=label: self._add_step(fi, lb))
+            n += 1
+        if n == 0:
+            menu.add_command(label="Every selected page is already in this flow", state="disabled")
+        menu.tk_popup(button.winfo_rootx(), button.winfo_rooty() + button.winfo_height())
+        menu.grab_release()
+
+    def _update_flow_count(self):
+        by = self._items_by_label()
+        usable = sum(1 for fl in self.flows if fl["on"].get() and sum(1 for lb in fl["steps"] if lb in by) >= 2)
+        self.flow_count.configure(text=f"{usable} of {len(self.flows)} flows will be created")
+
+    def _render_flows(self):
+        for w in self.flow_list.winfo_children():
+            w.destroy()
+        self._flow_imgs = []
+        by = self._items_by_label()
+        if not self.flows:
+            ctk.CTkLabel(self.flow_list, justify="left", font=self.f_body, text_color=MUTED,
+                         text="No flows could be generated from this selection.\nFlows follow the links between "
+                              "pages. You can still build your own with “+ New flow”."
+                         ).grid(row=0, column=0, sticky="w", padx=8, pady=20)
+        for fi, fl in enumerate(self.flows):
+            self._flow_card(fi, fl, by)
+        self._update_flow_count()
+
+    def _flow_card(self, fi, fl, by):
+        fl["steps"] = [lb for lb in fl["steps"] if lb in by]       # pages that are no longer selected disappear
+        steps = [by[lb] for lb in fl["steps"]]
+        names = sgif.crumbs(steps)
+        ok = len(steps) >= 2
+        card = self._card(self.flow_list)
+        card.grid(row=fi, column=0, sticky="ew", padx=(0, 10), pady=(0, 12))
+        card.grid_columnconfigure(0, weight=1)
+
+        head = ctk.CTkFrame(card, fg_color="transparent")
+        head.grid(row=0, column=0, sticky="ew", padx=16, pady=(12, 0))
+        head.grid_columnconfigure(1, weight=1)
+        ctk.CTkCheckBox(head, text=f"Flow {fi + 1}", variable=fl["on"], command=self._update_flow_count,
+                        font=self.f_bold, text_color=FG, fg_color=ORANGE, hover_color=ORANGE_H, border_color=MUTED,
+                        checkmark_color=ON_ORANGE, corner_radius=6, checkbox_width=22, checkbox_height=22
+                        ).grid(row=0, column=0, sticky="w")
+        ctk.CTkLabel(head, text=f"{len(steps)} steps" if ok else "needs at least 2 steps", font=self.f_small,
+                     text_color=MUTED if ok else DANGER).grid(row=0, column=1, sticky="w", padx=12)
+        add = self._ghost(head, "+ Add page", None, width=100, height=30)
+        add.configure(command=lambda b=add, i=fi: self._add_page_menu(i, b))
+        add.grid(row=0, column=2, padx=(0, 8))
+        self._ghost(head, "Remove flow", lambda i=fi: self._remove_flow(i), width=110, height=30).grid(row=0, column=3)
+        ctk.CTkLabel(card, text=sgif.SEP.join(names) if steps else "(empty)", font=self.f_small, text_color=MUTED,
+                     anchor="w", justify="left", wraplength=700).grid(row=1, column=0, sticky="w", padx=16, pady=(4, 6))
+
+        strip = ctk.CTkScrollableFrame(card, orientation="horizontal", height=176, fg_color="transparent",
+                                       scrollbar_button_color=BORDER, scrollbar_button_hover_color=ORANGE)
+        strip.grid(row=2, column=0, sticky="ew", padx=10, pady=(0, 10))
+        for si, it in enumerate(steps):
+            tile = ctk.CTkFrame(strip, fg_color=PANEL_H, corner_radius=10)
+            tile.grid(row=0, column=si * 2, padx=2, pady=2)
+            if it.get("thumb") is not None:
+                img = ctk.CTkImage(light_image=it["thumb"], dark_image=it["thumb"], size=(150, 94))
+                self._flow_imgs.append(img)
+                pic = ctk.CTkLabel(tile, image=img, text="")
+            else:
+                pic = ctk.CTkLabel(tile, text="(no preview)", width=150, height=94, text_color=MUTED)
+            pic.grid(row=0, column=0, columnspan=3, padx=8, pady=(8, 4))
+            title = f"{si + 1}. {names[si]}"
+            ctk.CTkLabel(tile, text=title if len(title) <= 22 else title[:21] + "…", font=self.f_small,
+                         text_color=FG).grid(row=1, column=0, columnspan=3, padx=8)
+            for col, (text, cmd, enabled) in enumerate((
+                    ("◀", lambda i=fi, k=si: self._move_step(i, k, -1), si > 0),
+                    ("✕", lambda i=fi, k=si: self._remove_step(i, k), True),
+                    ("▶", lambda i=fi, k=si: self._move_step(i, k, 1), si < len(steps) - 1))):
+                ctk.CTkButton(tile, text=text, width=34, height=24, corner_radius=8, fg_color=FIELD,
+                              hover_color=BORDER, text_color=FG if enabled else FAINT_TEXT, font=self.f_small,
+                              state="normal" if enabled else "disabled", command=cmd
+                              ).grid(row=2, column=col, padx=3, pady=(4, 8))
+            if si < len(steps) - 1:
+                ctk.CTkLabel(strip, text="›", font=ctk.CTkFont(size=28, weight="bold"), text_color=ORANGE
+                             ).grid(row=0, column=si * 2 + 1, padx=6)
+
+    def flows_next(self):
+        self._prepare_save_page()
+        self.go(4)
+
+    # ───────────── page 4: save ─────────────
     def _switch(self, parent, text, var, command):
         return ctk.CTkSwitch(parent, text=text, variable=var, onvalue=True, offvalue=False, command=command,
                              progress_color=ORANGE, button_color=FG, button_hover_color=FG, fg_color=FIELD,
                              text_color=FG, font=self.f_body)
 
+    def _segmented(self, parent, values, var, command):
+        return ctk.CTkSegmentedButton(parent, values=values, variable=var, command=lambda _v: command(),
+                                      selected_color=ORANGE, selected_hover_color=ORANGE_H, unselected_color=FIELD,
+                                      unselected_hover_color=PANEL, fg_color=FIELD, text_color=FG, font=self.f_body,
+                                      height=34, corner_radius=10)
+
     def _build_save_page(self):
-        page = self.pages[3]
+        page = self.pages[4]
         self._header(page, "Save your results", "Choose what to save and where.")
         body = ctk.CTkScrollableFrame(page, fg_color="transparent", scrollbar_button_color=BORDER,
                                       scrollbar_button_hover_color=ORANGE)
@@ -1101,23 +1269,32 @@ class App(ctk.CTk):
         self._switch(opts, "Screenshots (PNG)", self.save_png, self._refresh_save_ui).grid(row=0, column=0, padx=(0, 32))
         self._switch(opts, "GIF flows", self.make_gif, self._on_gif_toggle).grid(row=0, column=1)
 
-        self.gif_frame = ctk.CTkFrame(f, fg_color=PANEL_H, corner_radius=12)
-        self.gif_frame.grid(row=3, column=0, sticky="ew", padx=24, pady=(8, 4))
-        self.gif_frame.grid_columnconfigure(0, weight=1)
-        ctk.CTkLabel(self.gif_frame, justify="left", anchor="w", wraplength=620, font=self.f_small, text_color=MUTED,
-                     text="One GIF per flow: a path of pages from the start page to a page with nothing further "
-                          "down. Every frame shows the page, with a caption telling you where you are."
-                     ).grid(row=0, column=0, sticky="w", padx=16, pady=(14, 8))
-        nums = ctk.CTkFrame(self.gif_frame, fg_color="transparent")
-        nums.grid(row=1, column=0, sticky="w", padx=16)
-        for col, (label, var) in enumerate((("Seconds per step", self.gif_seconds), ("Max flows", self.gif_max))):
-            ctk.CTkLabel(nums, text=label, font=self.f_small, text_color=MUTED).grid(row=0, column=col * 2, padx=(0, 8))
-            self._entry(nums, var, width=80, height=34).grid(row=0, column=col * 2 + 1, padx=(0, 24))
-        self.flow_preview = ctk.CTkLabel(self.gif_frame, text="", justify="left", anchor="w", wraplength=620,
-                                         font=self.f_small, text_color=FG)
-        self.flow_preview.grid(row=2, column=0, sticky="w", padx=16, pady=(10, 14))
-        self.gif_frame.grid_remove()
-        self.gif_max.trace_add("write", lambda *_: self._refresh_save_ui())
+        g = self.gif_frame = ctk.CTkFrame(f, fg_color=PANEL_H, corner_radius=12)
+        g.grid(row=3, column=0, sticky="ew", padx=24, pady=(8, 4))
+        g.grid_columnconfigure(0, weight=1)
+        top = ctk.CTkFrame(g, fg_color="transparent")
+        top.grid(row=0, column=0, sticky="w", padx=16, pady=(14, 4))
+        ctk.CTkLabel(top, text="Style", font=self.f_small, text_color=MUTED).grid(row=0, column=0, padx=(0, 10))
+        self.gif_style_seg = self._segmented(top, ["Slideshow", "Live recording"], self.gif_style, self._on_style)
+        self.gif_style_seg.grid(row=0, column=1)
+        self.style_note = ctk.CTkLabel(g, text="", justify="left", anchor="w", wraplength=620, font=self.f_small,
+                                       text_color=MUTED)
+        self.style_note.grid(row=1, column=0, sticky="w", padx=16, pady=(2, 8))
+        self.opt_slide = ctk.CTkFrame(g, fg_color="transparent")
+        self.opt_slide.grid(row=2, column=0, sticky="w", padx=16)
+        ctk.CTkLabel(self.opt_slide, text="Seconds per step", font=self.f_small, text_color=MUTED).grid(
+            row=0, column=0, padx=(0, 8))
+        self._entry(self.opt_slide, self.gif_seconds, width=80, height=34).grid(row=0, column=1)
+        self.opt_live = ctk.CTkFrame(g, fg_color="transparent")
+        self.opt_live.grid(row=2, column=0, sticky="w", padx=16)
+        ctk.CTkLabel(self.opt_live, text="Quality", font=self.f_small, text_color=MUTED).grid(row=0, column=0, padx=(0, 10))
+        self._segmented(self.opt_live, ["Compact", "Standard", "High"], self.gif_quality,
+                        self._refresh_save_ui).grid(row=0, column=1)
+        self._switch(g, "App icon watermark", self.gif_wm, None).grid(row=3, column=0, sticky="w", padx=16, pady=(12, 0))
+        self.flow_preview = ctk.CTkLabel(g, text="", justify="left", anchor="w", wraplength=620, font=self.f_small,
+                                         text_color=FG)
+        self.flow_preview.grid(row=4, column=0, sticky="w", padx=16, pady=(10, 14))
+        g.grid_remove()
 
         ctk.CTkLabel(f, text="SAVE LOCATION", font=self.f_section, text_color=ORANGE).grid(
             row=4, column=0, sticky="w", padx=24, pady=(16, 0))
@@ -1149,22 +1326,63 @@ class App(ctk.CTk):
         self._ghost(btns, "Capture something else", self.reset_all, width=200).pack(side="left", padx=10)
         self.save_done.grid_remove()
         # the main action lives in the footer so it is always visible, even with the GIF panel open
-        _back, self.save_btn = self._footer(page, lambda: self.go(2), "Save", self.do_save)
+        _back, self.save_btn = self._footer(page, lambda: self.go(3), "Save", self.do_save)
         self.save_btn.configure(width=250)
+
+    def _prepare_save_page(self):
+        self.saved_dir = None
+        self.save_form.grid()
+        self.save_done.grid_remove()
+        n = len(self.selected())
+        self.save_summary.configure(text=f"{n} {'screenshot' if n == 1 else 'screenshots'} selected")
+        self.save_err.configure(text="")
+        self.save_status.configure(text="")
+        self.save_dir.set(self.settings["save_dir"])
+        web = bool(self.job) and self.job[0] == "web"
+        if not web:
+            self.gif_style.set("Slideshow")
+        self.gif_style_seg.configure(state="normal" if web else "disabled")
+        self.save_btn.grid()
+        self.save_btn.configure(state="normal")
+        self._on_style()
 
     def pick_save(self):
         f = filedialog.askdirectory()
         if f:
             self.save_dir.set(f)
 
-    def _current_flows(self):
-        return sgif.build_flows(self.selected(), all_items=self.items, max_flows=self._num(self.gif_max, 12, lo=1))
+    def _active_flows(self):
+        """The flows that will become GIFs: switched on and with at least two pages."""
+        by = self._items_by_label()
+        result = []
+        for fl in self.flows:
+            steps = [by[lb] for lb in fl["steps"] if lb in by]
+            if fl["on"].get() and len(steps) >= 2:
+                result.append(steps)
+        return result
 
     def _on_gif_toggle(self):
         if self.make_gif.get():
             self.gif_frame.grid()
         else:
             self.gif_frame.grid_remove()
+        self._on_style()
+
+    def _on_style(self):
+        live = self.gif_style.get() == "Live recording"
+        if live:
+            self.opt_slide.grid_remove()
+            self.opt_live.grid()
+            self.style_note.configure(text="Replays every flow in a real browser — scrolling, moving the mouse and "
+                                           "clicking the link to the next page — and records it moment by moment. "
+                                           "Smoother, but slower and the files are bigger.")
+        else:
+            self.opt_live.grid_remove()
+            self.opt_slide.grid()
+            note = "One frame per page — quick to create and small."
+            if not (bool(self.job) and self.job[0] == "web"):
+                note += " Live recording is available for websites only."
+            self.style_note.configure(text=note)
         self._refresh_save_ui()
 
     def _refresh_save_ui(self, *_):
@@ -1173,7 +1391,7 @@ class App(ctk.CTk):
             return
         n = len(self.selected())
         png, gif = self.save_png.get(), self.make_gif.get()
-        flows = self._current_flows() if gif else []
+        flows = self._active_flows() if gif else []
         if gif:
             lines = sgif.describe_flows(flows)
             if flows:
@@ -1182,8 +1400,7 @@ class App(ctk.CTk):
                 if len(lines) > 6:
                     text += f"\n… and {len(lines) - 6} more"
             else:
-                text = ("No flows can be created from this selection. A flow needs at least two connected "
-                        "pages or screens: a page and one that is reached from it.")
+                text = "No flows are switched on. Go back to Flows to enable or create some."
             self.flow_preview.configure(text=text)
         if png and gif:
             label = "Save screenshots + GIFs"
@@ -1205,22 +1422,23 @@ class App(ctk.CTk):
         if not raw:
             self.save_err.configure(text="Choose a folder first.")
             return
-        if gif and not png and not self._current_flows():
-            self.save_err.configure(text="No GIF flows can be created from this selection.")
+        keys = ("path", "label", "parent", "title", "kind", "links")
+        flows = [[{k: it[k] for k in keys} for it in f] for f in self._active_flows()] if gif else []
+        if gif and not flows and not png:
+            self.save_err.configure(text="No flows are switched on. Go back to Flows to enable or create some.")
             return
-        keys = ("path", "label", "parent", "title", "kind")
         chosen = [{k: it[k] for k in keys} for it in self.selected()]
-        everything = [{k: it[k] for k in keys} for it in self.items]
         self.save_err.configure(text="")
         self.save_status.configure(text="Saving…")
         self.save_btn.configure(state="disabled", text="Saving…")
         threading.Thread(
             target=self._save_worker,
-            args=(Path(raw).expanduser(), chosen, everything, png, gif,
-                  self._num(self.gif_seconds, 1.6, float, lo=0.2), self._num(self.gif_max, 12, lo=1)),
+            args=(Path(raw).expanduser(), chosen, flows, png, gif, self.gif_style.get(),
+                  self._num(self.gif_seconds, 1.6, float, lo=0.2), self.gif_quality.get().lower(),
+                  bool(self.gif_wm.get()), self.scan_ns),
             daemon=True).start()
 
-    def _save_worker(self, dest, chosen, everything, png, gif, seconds, max_flows):
+    def _save_worker(self, dest, chosen, flows, png, gif, style, seconds, quality, watermark, scan_ns):
         try:
             dest.mkdir(parents=True, exist_ok=True)
             copied = 0
@@ -1234,11 +1452,19 @@ class App(ctk.CTk):
                     shutil.copy2(it["path"], target)
                     copied += 1
             made = []
-            if gif:
+            if gif and flows:
                 def progress(n, total, crumbs):
                     self.q.put(("save_progress", f"Creating GIF {n} of {total}…"))
-                made = sgif.export_flows(chosen, dest / "flows", all_items=everything,
-                                         seconds_per_step=seconds, max_flows=max_flows, progress=progress)
+                if style == "Live recording":
+                    sa.STOP.clear()
+                    try:
+                        made = slive.record_flows(flows, dest / "flows", scan_ns, quality, watermark, progress)
+                    except sa.BrowserUnavailable as e:
+                        self.q.put(("save_progress", f"No usable browser found ({e}). Downloading Chromium…"))
+                        sa.install_chromium()
+                        made = slive.record_flows(flows, dest / "flows", scan_ns, quality, watermark, progress)
+                else:
+                    made = sgif.render_flows(flows, dest / "flows", seconds, watermark, progress)
             self.q.put(("save_done", copied, len(made), str(dest)))
         except Exception as e:
             self.q.put(("save_error", str(e)))
@@ -1270,6 +1496,7 @@ class App(ctk.CTk):
         for it in self.items:
             it["card"].destroy()
         self.items = []
+        self.flows, self._flows_sig = [], None
         self.buf.clear()
         self.go(0)
 

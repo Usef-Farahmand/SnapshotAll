@@ -34,7 +34,7 @@ jobs:
           python-version: "3.11"
       - name: Install Playwright and Chromium
         run: |
-          pip install playwright pytest
+          pip install playwright pytest pillow
           playwright install --with-deps chromium
       - name: Run browser tests
         run: python -m pytest -q

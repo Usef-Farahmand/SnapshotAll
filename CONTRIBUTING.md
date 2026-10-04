@@ -32,10 +32,11 @@ python snapshot_all.py https://example.com   # CLI
 - `snapshot_gui.py` — wizard-style desktop app (customtkinter)
 - `snapshot_all.py` — CLI plus website and Android engines
 - `snapshot_desktop.py` — Windows app engine
-- `snapshot_gif.py` — builds flows from the discovery tree and renders captioned GIFs
+- `snapshot_gif.py` — builds flows from the link graph and renders captioned slideshow GIFs
+- `snapshot_live.py` — live recording: replays a flow in a real browser and records it as a GIF
 - `snapshot_common.py` — shared helpers (stop flag, `emit`, slugify, app name/version/author)
 
-Every engine exposes `run_*(target, out_dir, args)`, checks `snapshot_common.STOP` so the GUI can stop it, and reports each new screenshot through `snapshot_common.emit(args, path, label, parent, title, kind)` — that is how the GUI shows live previews and how GIF flows learn how each page was reached.
+Every engine exposes `run_*(target, out_dir, args)`, checks `snapshot_common.STOP` so the GUI can stop it, and reports each new screenshot through `snapshot_common.emit(args, path, label, parent, title, kind, links)` — that is how the GUI shows live previews and how GIF flows learn how each page was reached and which pages link to which.
 
 ## Guidelines
 

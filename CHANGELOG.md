@@ -9,6 +9,21 @@ and this project follows [Semantic Versioning](https://semver.org/).
 ### Changed
 - CI: pushes to `develop` and pull requests to `main` now build the app and keep the installer, portable zip and checksums as downloadable artifacts (14 days). Public GitHub Releases are still published only from `main` and from version tags. Release tags follow the app version (`v1.3.N`).
 
+## [1.4.0] - 2026-10-03
+
+### Added
+- **Flows stage** between Scan and Save: the flow graph, one chain of page tiles per flow. Switch flows on or off, remove them, create new ones, move or remove steps, add pages, regenerate.
+- **Longer flows.** Flows are built from the real links between pages (content links before menu links, URL hierarchy before unrelated pages) and continued along links until they reach *Steps per flow* (default 5), so flows are no longer always two steps.
+- **Live recording** GIF style (websites): each flow is replayed in a real browser — scrolling, a mouse pointer moving to the link, a click, cross-fades — and recorded moment by moment. Quality: Compact / Standard / High.
+- The app icon as a **watermark** on every GIF frame (switch in the Save step, `--no-watermark`).
+- Command line: `--gif-style`, `--gif-quality`, `--flow-steps`, `--no-watermark`.
+- Web engine reports every same-site link with its zone (menu or content).
+- Tests for the flow graph, captions, watermark and live recording.
+
+### Changed
+- GIF captions never contain Persian / Arabic / Hebrew text; such titles fall back to the end of the address or to "Page N" / "Screen N".
+- *Max flows* moved from the Save step to the Flows stage.
+
 ## [1.3.0] - 2026-10-02
 
 ### Added
