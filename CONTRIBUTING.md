@@ -80,6 +80,8 @@ Browser tests for full-page capture live in `tests/` (`pip install playwright py
 
 Pushes to `develop` and pull requests build the app too, but only as downloadable artifacts (Actions → the run → Artifacts). Releases are published automatically by GitHub Actions when changes land on `main` or a version tag is pushed.
 
+Don't write the version number anywhere else: it comes from `_DEFAULT_VERSION` in `snapshot_common.py` and is injected into the app, exe, installer and release by `tools/set_version.py` during the build.
+
 ## Questions?
 
 Open a [discussion or issue](../../issues) — happy to help.

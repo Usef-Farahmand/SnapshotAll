@@ -16,6 +16,8 @@ else:
     os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "0")
 
 import argparse
+import base64
+import io
 import json
 import queue
 import shutil
@@ -408,7 +410,8 @@ class App(ctk.CTk):
         self.flow_max = tk.StringVar(value="12")
         self.flows = []             # editable flows: {"on": BooleanVar, "steps": [item labels]}
         self._flows_sig = None      # selection the flows were generated from
-        self._flow_imgs = []
+        self._flow_cards = []       # one card (frame) per flow
+        self._tile_photos = {}      # (page label, size) -> PhotoImage, cached
         self.scan_ns = None         # settings of the last scan (used by live recording)
 
         self.grid_rowconfigure(2, weight=1)
@@ -979,6 +982,12 @@ class App(ctk.CTk):
             self._place(it, i)
 
     def _maybe_reflow(self):
+        if self.current == 3 and self.flows:                      # re-wrap the flow tiles when the width changes
+            per_row = self._tiles_per_row()
+            known = getattr(self, "_flow_per_row", None)
+            self._flow_per_row = per_row
+            if known is not None and per_row != known:
+                self._render_flows()
         if self.current != 2:
             return
         w = self.scroll_frame.winfo_width()
@@ -1131,18 +1140,23 @@ class App(ctk.CTk):
 
     def _remove_step(self, fi, si):
         del self.flows[fi]["steps"][si]
-        self._render_flows()
+        self._refresh_flow(fi)
 
     def _move_step(self, fi, si, delta):
         steps = self.flows[fi]["steps"]
         j = si + delta
         if 0 <= j < len(steps):
             steps[si], steps[j] = steps[j], steps[si]
-            self._render_flows()
+            self._refresh_flow(fi)
 
     def _add_step(self, fi, label):
         self.flows[fi]["steps"].append(label)
-        self._render_flows()
+        self._refresh_flow(fi)
+
+    def _refresh_flow(self, fi):
+        """Rebuild just one flow card (cheap) instead of the whole list."""
+        self._fill_flow_card(self._flow_cards[fi], fi)
+        self._update_flow_count()
 
     def _add_page_menu(self, fi, button):
         present = set(self.flows[fi]["steps"])
@@ -1168,25 +1182,51 @@ class App(ctk.CTk):
     def _render_flows(self):
         for w in self.flow_list.winfo_children():
             w.destroy()
-        self._flow_imgs = []
-        by = self._items_by_label()
+        self._flow_cards = []
         if not self.flows:
             ctk.CTkLabel(self.flow_list, justify="left", font=self.f_body, text_color=MUTED,
                          text="No flows could be generated from this selection.\nFlows follow the links between "
                               "pages. You can still build your own with “+ New flow”."
                          ).grid(row=0, column=0, sticky="w", padx=8, pady=20)
-        for fi, fl in enumerate(self.flows):
-            self._flow_card(fi, fl, by)
+        for fi in range(len(self.flows)):
+            card = self._card(self.flow_list)
+            card.grid(row=fi, column=0, sticky="ew", padx=(0, 10), pady=(0, 12))
+            card.grid_columnconfigure(0, weight=1)
+            self._flow_cards.append(card)
+            self._fill_flow_card(card, fi)
         self._update_flow_count()
 
-    def _flow_card(self, fi, fl, by):
+    def _tile_scale(self):
+        try:
+            return float(self._get_window_scaling())
+        except Exception:
+            return 1.0
+
+    def _tiles_per_row(self):
+        width = self.flow_list.winfo_width()
+        if width < 300:
+            return 4
+        return max(2, min(8, int((width - 100) // (196 * self._tile_scale()))))
+
+    def _tile_photo(self, item, size):
+        key = (item["label"], size)
+        if key not in self._tile_photos:
+            buf = io.BytesIO()
+            item["thumb"].resize(size, Image.LANCZOS).save(buf, "PNG")
+            self._tile_photos[key] = tk.PhotoImage(data=base64.b64encode(buf.getvalue()))
+        return self._tile_photos[key]
+
+    def _fill_flow_card(self, card, fi):
+        """(Re)build the contents of one flow card. Page tiles use light native Tk widgets and wrap onto
+        several rows: no nested scroll areas, and far fewer canvas-based widgets to redraw while scrolling."""
+        for w in card.winfo_children():
+            w.destroy()
+        fl = self.flows[fi]
+        by = self._items_by_label()
         fl["steps"] = [lb for lb in fl["steps"] if lb in by]       # pages that are no longer selected disappear
         steps = [by[lb] for lb in fl["steps"]]
         names = sgif.crumbs(steps)
         ok = len(steps) >= 2
-        card = self._card(self.flow_list)
-        card.grid(row=fi, column=0, sticky="ew", padx=(0, 10), pady=(0, 12))
-        card.grid_columnconfigure(0, weight=1)
 
         head = ctk.CTkFrame(card, fg_color="transparent")
         head.grid(row=0, column=0, sticky="ew", padx=16, pady=(12, 0))
@@ -1204,33 +1244,34 @@ class App(ctk.CTk):
         ctk.CTkLabel(card, text=sgif.SEP.join(names) if steps else "(empty)", font=self.f_small, text_color=MUTED,
                      anchor="w", justify="left", wraplength=700).grid(row=1, column=0, sticky="w", padx=16, pady=(4, 6))
 
-        strip = ctk.CTkScrollableFrame(card, orientation="horizontal", height=176, fg_color="transparent",
-                                       scrollbar_button_color=BORDER, scrollbar_button_hover_color=ORANGE)
-        strip.grid(row=2, column=0, sticky="ew", padx=10, pady=(0, 10))
+        strip = tk.Frame(card, bg=PANEL, highlightthickness=0, bd=0)
+        strip.grid(row=2, column=0, sticky="w", padx=14, pady=(0, 12))
+        per_row, sc = self._tiles_per_row(), self._tile_scale()
+        size = (int(150 * sc), int(94 * sc))
+        small = ("Segoe UI", 9)
         for si, it in enumerate(steps):
-            tile = ctk.CTkFrame(strip, fg_color=PANEL_H, corner_radius=10)
-            tile.grid(row=0, column=si * 2, padx=2, pady=2)
+            row, col = divmod(si, per_row)
+            tile = tk.Frame(strip, bg=PANEL_H, highlightthickness=1, highlightbackground=BORDER, bd=0)
+            tile.grid(row=row, column=col * 2, padx=2, pady=4)
             if it.get("thumb") is not None:
-                img = ctk.CTkImage(light_image=it["thumb"], dark_image=it["thumb"], size=(150, 94))
-                self._flow_imgs.append(img)
-                pic = ctk.CTkLabel(tile, image=img, text="")
+                pic = tk.Label(tile, image=self._tile_photo(it, size), bg=PANEL_H, bd=0)
             else:
-                pic = ctk.CTkLabel(tile, text="(no preview)", width=150, height=94, text_color=MUTED)
+                pic = tk.Label(tile, text="(no preview)", fg=MUTED, bg=PANEL_H, width=18, height=5)
             pic.grid(row=0, column=0, columnspan=3, padx=8, pady=(8, 4))
             title = f"{si + 1}. {names[si]}"
-            ctk.CTkLabel(tile, text=title if len(title) <= 22 else title[:21] + "…", font=self.f_small,
-                         text_color=FG).grid(row=1, column=0, columnspan=3, padx=8)
-            for col, (text, cmd, enabled) in enumerate((
+            tk.Label(tile, text=title if len(title) <= 22 else title[:21] + "…", fg=FG, bg=PANEL_H,
+                     font=small).grid(row=1, column=0, columnspan=3, padx=8)
+            for c, (text, cmd, enabled) in enumerate((
                     ("◀", lambda i=fi, k=si: self._move_step(i, k, -1), si > 0),
                     ("✕", lambda i=fi, k=si: self._remove_step(i, k), True),
                     ("▶", lambda i=fi, k=si: self._move_step(i, k, 1), si < len(steps) - 1))):
-                ctk.CTkButton(tile, text=text, width=34, height=24, corner_radius=8, fg_color=FIELD,
-                              hover_color=BORDER, text_color=FG if enabled else FAINT_TEXT, font=self.f_small,
-                              state="normal" if enabled else "disabled", command=cmd
-                              ).grid(row=2, column=col, padx=3, pady=(4, 8))
+                tk.Button(tile, text=text, command=cmd, width=3, bd=0, relief="flat", font=small, bg=FIELD,
+                          fg=FG, activebackground=BORDER, activeforeground=FG, disabledforeground=FAINT_TEXT,
+                          highlightthickness=0, cursor="hand2" if enabled else "arrow",
+                          state="normal" if enabled else "disabled").grid(row=2, column=c, padx=3, pady=(4, 8))
             if si < len(steps) - 1:
-                ctk.CTkLabel(strip, text="›", font=ctk.CTkFont(size=28, weight="bold"), text_color=ORANGE
-                             ).grid(row=0, column=si * 2 + 1, padx=6)
+                tk.Label(strip, text="›", fg=ORANGE, bg=PANEL, font=("Segoe UI", 20, "bold")
+                         ).grid(row=row, column=col * 2 + 1, padx=4)
 
     def flows_next(self):
         self._prepare_save_page()

@@ -9,6 +9,15 @@ and this project follows [Semantic Versioning](https://semver.org/).
 ### Changed
 - CI: pushes to `develop` and pull requests to `main` now build the app and keep the installer, portable zip and checksums as downloadable artifacts (14 days). Public GitHub Releases are still published only from `main` and from version tags. Release tags follow the app version (`v1.3.N`).
 
+## [1.4.1] - 2026-10-03
+
+### Fixed
+- **Flows page scrolled badly** (content jumped and looked "cached"). Every flow card contained its own nested horizontal scroll area, and CustomTkinter hands the mouse wheel to those areas first: the page could not be scrolled with the pointer over the page tiles, and the tiles area moved up and down instead. The nested scroll areas are gone (tiles now wrap onto several rows), the tiles are built from light native widgets (about half as many widgets as before), and editing a flow redraws only that flow's card.
+- **The version shown in the app header differed from the version of the installer.** The version number was written by hand in several places (`snapshot_common.py`, `installer.iss`, the release name). It now has a single source: `tools/set_version.py` decides it at build time and injects the same string into the app header and Settings > About, the file properties of `SnapshotAll.exe`, the installer (Add/Remove Programs) and the release name. Builds from `main` are `MAJOR.MINOR.<build number>`, tags `vX.Y.Z` are used exactly, and builds from other branches are `MAJOR.MINOR.0-dev.<build number>`.
+
+### Changed
+- `installer.iss` no longer contains a version number; compile it with `ISCC /DMyAppVersion=<version>` (`build_exe.bat` does this when Inno Setup is installed).
+
 ## [1.4.0] - 2026-10-03
 
 ### Added

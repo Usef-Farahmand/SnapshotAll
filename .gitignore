@@ -8,3 +8,5 @@ __pycache__/
 *.spec
 SnapshotAll_Output/
 screenshots_*/
+_build_version.py
+version_info.txt

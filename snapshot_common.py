@@ -5,7 +5,11 @@ from pathlib import Path
 from urllib.parse import urldefrag, urlparse
 
 APP_NAME = "SnapshotAll"
-APP_VERSION = "1.4.0"
+_DEFAULT_VERSION = "1.4.1"   # the one place to change it by hand; see tools/set_version.py
+try:                           # written at build time, so the app, installer and release all show the same version
+    from _build_version import APP_VERSION  # noqa: F401
+except ImportError:
+    APP_VERSION = _DEFAULT_VERSION
 APP_AUTHOR = "Usef Farahmand"
 APP_URL = "https://github.com/Usef-Farahmand"
 APP_WEBSITE = "https://www.useffarahmand.com/"

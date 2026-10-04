@@ -207,7 +207,9 @@ On Windows you can also double-click `run_gui.bat` — it creates a virtual envi
 
 **GitHub Actions (recommended).** Push to `main` (or run *Build Windows EXE and Release* manually). The workflow builds the app with PyInstaller, creates the installer with Inno Setup and publishes both to a GitHub Release.
 
-**Locally on Windows.** Double-click `build_exe.bat` → `dist\SnapshotAll\SnapshotAll.exe`. To also create the installer, install [Inno Setup](https://jrsoftware.org/isinfo.php) and compile `installer.iss`.
+**Locally on Windows.** Double-click `build_exe.bat` → `dist\SnapshotAll\SnapshotAll.exe`. If [Inno Setup](https://jrsoftware.org/isinfo.php) is installed, it also creates `Output\SnapshotAll_Setup.exe`.
+
+**Version numbers.** The default version is `_DEFAULT_VERSION` in `snapshot_common.py` — change it there to start a new release line (e.g. `1.5.0`). At build time `tools/set_version.py` decides the final version and injects the *same* string into the app header and Settings → About, the file properties of the exe, the installer and the release name: tags `vX.Y.Z` are used exactly, builds from `main` are `MAJOR.MINOR.<build number>`, other branches `MAJOR.MINOR.0-dev.<build number>`.
 
 ## Project structure
 
@@ -218,7 +220,8 @@ SnapshotAll/
 ├── snapshot_desktop.py    # Windows app engine (UI Automation)
 ├── snapshot_gif.py        # flows (link graph) and captioned slideshow GIFs
 ├── snapshot_live.py       # live recording: replays a flow in a browser and records it
-├── snapshot_common.py     # shared helpers, app name / version / author / website
+├── snapshot_common.py     # shared helpers, app name / default version / author / website
+├── tools/set_version.py   # decides the build version and injects it everywhere
 ├── assets/                # logo and icons
 ├── docs/                  # README images
 ├── installer.iss          # Inno Setup installer script
