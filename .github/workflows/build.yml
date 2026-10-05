@@ -3,7 +3,7 @@ name: Build Windows EXE and Release
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, develop]
     paths-ignore:
       - "**.md"
       - "LICENSE"
@@ -15,9 +15,26 @@ on:
       - ".gitattributes"
       - ".editorconfig"
     tags: ["v*"]
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - "**.md"
+      - "LICENSE"
+      - "docs/**"
+      - ".github/ISSUE_TEMPLATE/**"
+      - ".github/PULL_REQUEST_TEMPLATE.md"
+      - ".github/dependabot.yml"
+      - ".gitignore"
+      - ".gitattributes"
+      - ".editorconfig"
 
 permissions:
   contents: write
+
+# A newer push to the same branch makes an older, still-running build pointless.
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -32,11 +49,20 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt pyinstaller
 
+      # One version number for everything: app header / About, exe properties, installer and release name.
+      - name: Decide the version
+        id: ver
+        shell: bash
+        run: |
+          version=$(python tools/set_version.py --ci "$GITHUB_REF" "$GITHUB_REF_NAME" "$GITHUB_RUN_NUMBER")
+          echo "Building SnapshotAll $version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
       - name: Build exe
-        run: pyinstaller --noconfirm --onedir --windowed --name SnapshotAll --icon assets/icon.ico --add-data "assets;assets" --collect-all customtkinter --collect-all playwright --collect-all uiautomator2 --collect-all adbutils --collect-all pywinauto --collect-all comtypes snapshot_gui.py
+        run: pyinstaller --noconfirm --onedir --windowed --name SnapshotAll --icon assets/icon.ico --version-file version_info.txt --add-data "assets;assets" --collect-all customtkinter --collect-all playwright --collect-all uiautomator2 --collect-all adbutils --collect-all pywinauto --collect-all comtypes snapshot_gui.py
 
       - name: Build installer
-        run: '& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" installer.iss'
+        run: '& "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /DMyAppVersion=${{ steps.ver.outputs.version }} installer.iss'
 
       - name: Zip portable version
         run: Compress-Archive -Path dist\SnapshotAll -DestinationPath SnapshotAll_Portable.zip
@@ -45,16 +71,33 @@ jobs:
         run: |
           Get-FileHash Output\SnapshotAll_Setup.exe, SnapshotAll_Portable.zip -Algorithm SHA256 | ForEach-Object { "$($_.Hash.ToLower())  $(Split-Path $_.Path -Leaf)" } | Set-Content -Encoding ascii SHA256SUMS.txt
 
+      # Every build (develop, pull requests, main, tags) keeps its output for two weeks:
+      # Actions -> the run -> Artifacts.
       - uses: actions/upload-artifact@v4
         with:
           name: SnapshotAll_Setup
           path: Output/SnapshotAll_Setup.exe
+          retention-days: 14
 
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SnapshotAll_Portable
+          path: SnapshotAll_Portable.zip
+          retention-days: 14
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SHA256SUMS
+          path: SHA256SUMS.txt
+          retention-days: 14
+
+      # Public GitHub Releases are published only from main and from version tags.
       - name: Publish GitHub Release
+        if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('v1.2.{0}', github.run_number) }}
-          name: SnapshotAll ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('v1.2.{0}', github.run_number) }}
+          tag_name: ${{ format('v{0}', steps.ver.outputs.version) }}
+          name: SnapshotAll ${{ format('v{0}', steps.ver.outputs.version) }}
           target_commitish: ${{ github.sha }}
           generate_release_notes: true
           files: |

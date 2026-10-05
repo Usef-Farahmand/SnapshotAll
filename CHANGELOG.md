@@ -6,6 +6,42 @@ and this project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- CI: pushes to `develop` and pull requests to `main` now build the app and keep the installer, portable zip and checksums as downloadable artifacts (14 days). Public GitHub Releases are still published only from `main` and from version tags. Release tags follow the app version (`v1.3.N`).
+
+## [1.4.1] - 2026-10-03
+
+### Fixed
+- **Flows page scrolled badly** (content jumped and looked "cached"). Every flow card contained its own nested horizontal scroll area, and CustomTkinter hands the mouse wheel to those areas first: the page could not be scrolled with the pointer over the page tiles, and the tiles area moved up and down instead. The nested scroll areas are gone (tiles now wrap onto several rows), the tiles are built from light native widgets (about half as many widgets as before), and editing a flow redraws only that flow's card.
+- **The version shown in the app header differed from the version of the installer.** The version number was written by hand in several places (`snapshot_common.py`, `installer.iss`, the release name). It now has a single source: `tools/set_version.py` decides it at build time and injects the same string into the app header and Settings > About, the file properties of `SnapshotAll.exe`, the installer (Add/Remove Programs) and the release name. Builds from `main` are `MAJOR.MINOR.<build number>`, tags `vX.Y.Z` are used exactly, and builds from other branches are `MAJOR.MINOR.0-dev.<build number>`.
+
+### Changed
+- `installer.iss` no longer contains a version number; compile it with `ISCC /DMyAppVersion=<version>` (`build_exe.bat` does this when Inno Setup is installed).
+
+## [1.4.0] - 2026-10-03
+
+### Added
+- **Flows stage** between Scan and Save: the flow graph, one chain of page tiles per flow. Switch flows on or off, remove them, create new ones, move or remove steps, add pages, regenerate.
+- **Longer flows.** Flows are built from the real links between pages (content links before menu links, URL hierarchy before unrelated pages) and continued along links until they reach *Steps per flow* (default 5), so flows are no longer always two steps.
+- **Live recording** GIF style (websites): each flow is replayed in a real browser — scrolling, a mouse pointer moving to the link, a click, cross-fades — and recorded moment by moment. Quality: Compact / Standard / High.
+- The app icon as a **watermark** on every GIF frame (switch in the Save step, `--no-watermark`).
+- Command line: `--gif-style`, `--gif-quality`, `--flow-steps`, `--no-watermark`.
+- Web engine reports every same-site link with its zone (menu or content).
+- Tests for the flow graph, captions, watermark and live recording.
+
+### Changed
+- GIF captions never contain Persian / Arabic / Hebrew text; such titles fall back to the end of the address or to "Page N" / "Screen N".
+- *Max flows* moved from the Save step to the Flows stage.
+
+## [1.3.0] - 2026-10-02
+
+### Added
+- **GIF flows**: one animated GIF per navigation flow (a path from the start page / home screen to a page with nothing further down). Each frame shows the page with a caption of the whole path, the current step highlighted, the page address and a step counter.
+- Save step: choose **Screenshots (PNG)**, **GIF flows** or both, with seconds per step, a maximum number of flows and a preview of the flows that will be created. The Save button now lives in the footer so it is always visible.
+- Command line: `--gif`, `--gif-seconds`, `--max-flows`.
+- The engines now report how each page was reached (parent page and link text; tap trail for apps).
+- Unit tests for flows (`tests/test_flows.py`).
+
 ## [1.2.2] - 2026-10-01
 
 ### Fixed

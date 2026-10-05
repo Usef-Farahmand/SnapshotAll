@@ -30,6 +30,7 @@
 - [Why SnapshotAll?](#why-snapshotall)
 - [How it works: four simple steps](#how-it-works-four-simple-steps)
 - [Supported sources](#supported-sources)
+- [GIF flows](#gif-flows)
 - [Download and install (Windows)](#download-and-install-windows)
 - [Command-line usage](#command-line-usage)
 - [Code signing](#code-signing)
@@ -44,14 +45,15 @@
 
 Designers, QA engineers, developers and writers often need a visual record of *every* page or screen of a product — for design reviews, regression checks, hand-offs or archiving. Doing that by hand is slow. SnapshotAll scans the source for you, shows a live preview of everything it finds, lets you pick what to keep, and saves it where you want.
 
-## How it works: four simple steps
+## How it works: five simple steps
 
 | | Step | What happens |
 |---|---|---|
 | 1 | **Source** | Choose **Website** or **App** and enter its address (a URL, or an `.apk` / `.exe` / `.jar` file). |
 | 2 | **Settings** | Tune the options for that source: depth, limits, mobile mode, login session, and more. |
 | 3 | **Scan** | A progress bar runs while SnapshotAll explores the whole source. Every page or screen it finds appears right away as a **preview card** you can select or deselect. |
-| 4 | **Save** | Pick the save location. Only the screenshots you selected are saved. |
+| 4 | **Flows** | SnapshotAll draws the paths through your pages as a **flow graph**: one chain of pages per flow. Switch flows on or off, reorder or remove steps, add pages, or build your own. |
+| 5 | **Save** | Choose what to save — **screenshots (PNG)**, **GIF flows**, or both — and where. |
 
 <table>
 <tr>
@@ -60,13 +62,16 @@ Designers, QA engineers, developers and writers often need a visual record of *e
 </tr>
 <tr>
 <td><img src="docs/screenshot-3-scan.png" alt="Step 3 - Scan"></td>
-<td><img src="docs/screenshot-4-save.png" alt="Step 4 - Save"></td>
+<td><img src="docs/screenshot-4-flows.png" alt="Step 4 - Flows"></td>
+</tr>
+<tr>
+<td colspan="2"><img src="docs/screenshot-5-save.png" alt="Step 5 - Save"></td>
 </tr>
 </table>
 
 The app has a modern dark-and-orange interface with a toolbar (**New capture**, **Settings**). **Settings** holds the default save location and an **About** section with the app version, the developer's name and website.
 
-<div align="center"><img src="docs/screenshot-5-about.png" alt="Settings and About" width="300"></div>
+<div align="center"><img src="docs/screenshot-6-about.png" alt="Settings and About" width="300"></div>
  Screenshots are kept in a temporary folder during the scan and removed when you finish — nothing else is written to disk, and no log files are created.
 
 ## Supported sources
@@ -84,6 +89,34 @@ The app has a modern dark-and-orange interface with a toolbar (**New capture**, 
 - **Android `.apk`** — installs the app on an emulator or USB phone, taps through the UI and captures every unique screen (with optional scrolling).
 - **Windows `.exe` / `.jar`** — launches the program (or attaches to a running window by title) and uses Windows UI Automation to click buttons, tabs, menu items and links, capturing every new window state and dialog.
 - Risky buttons (`delete`, `logout`, `pay`, `exit`, `save`, …) are skipped by default — configurable in Settings.
+
+## GIF flows
+
+Turn the scan into short animated walkthroughs. A **flow** is a path through the site (or app): an ordered list of pages, **two or more steps long**. Every flow becomes **one GIF**, and a caption underneath always tells you where you are.
+
+<div align="center"><img src="docs/sample-flow.gif" alt="Slideshow GIF flow" width="560"> <img src="docs/sample-flow-live.gif" alt="Live-recorded GIF flow" width="560"><br><sub>Left: slideshow. Right: live recording.</sub></div>
+
+**How flows are built.** Pages are linked into a graph from the real links on every page. A link inside the page content beats a menu link, and a page "above" another in the address (`/services` → `/services/design`) beats an unrelated one. Those paths are the base flows. Flows that are shorter than **Steps per flow** (default 5) are continued along real links, content links first and pages used by few flows first, so you get journeys such as `Home › Services › Design › About › Contact` instead of only "start page + one page".
+
+**The Flows stage.** Before saving you review the flow graph — each flow is a chain of page tiles connected by arrows:
+
+- switch a flow on or off, **remove** it, or create a **+ New flow**;
+- **◀ ✕ ▶** under every tile moves a step, or removes it from that flow;
+- **+ Add page** appends any selected page to a flow;
+- **Regenerate** rebuilds the flows with a different *Steps per flow* / *Max flows*.
+
+Flows are built from the pages you kept on the Scan step; if you deselect a page on the way, its flow simply carries on from the next one.
+
+**Two styles** (chosen on the Save step):
+
+| Style | What it is | Good for |
+|---|---|---|
+| **Slideshow** | One frame per page (the top of the page). Quick to create, small files. | Quick overviews, any source. |
+| **Live recording** | SnapshotAll replays each flow in a real browser — scrolling through the page, moving a mouse pointer to the link, clicking it, cross-fading to the next page — and records it moment by moment. Quality: Compact / Standard / High. | Demos and documentation. **Websites only.** Larger files and slower. |
+
+**Every frame** shows the page, the app icon as a **watermark** (can be turned off), and a caption with the whole path with the current step highlighted (`Home › Services › Design › About`), the page address (or tap trail for apps), a step counter and progress dots. Captions never contain Persian / Arabic text: such titles are replaced by the last part of the address, or by "Page 3" / "Screen 3".
+
+GIFs are written to a `flows` folder inside your save location. On the command line use `--gif` (see the options below).
 
 ## Download and install (Windows)
 
@@ -124,6 +157,13 @@ python snapshot_all.py --attach "Untitled - Notepad"
 | `--width`, `--height` | web | `1440`, `900` | Viewport size |
 | `--mobile` | web | off | Emulate a phone (iPhone 13) |
 | `--keep-floating` | web | off | Don't move or hide fixed / sticky bars (footers, cookie banners, chat bubbles) |
+| `--gif` | all | off | Also create one GIF per flow in `<out>/flows` |
+| `--gif-style` | all | `slideshow` | `slideshow`, or `live` (replay each flow in a real browser; websites only) |
+| `--gif-quality` | web | `standard` | Live GIFs: `compact`, `standard` or `high` |
+| `--gif-seconds` | all | `1.6` | Slideshow: seconds each step is shown |
+| `--flow-steps` | all | `5` | Continue flows along links until they have this many steps |
+| `--max-flows` | all | `12` | Maximum number of GIF flows |
+| `--no-watermark` | all | off | Don't add the app icon to GIFs |
 | `--storage-state` | web | – | Playwright session file for logged-in pages |
 | `--max-screens` | apps | `40` | Maximum screens / window states |
 | `--max-clicks` | apps | `25` | Max tappable elements tried per screen |
@@ -167,7 +207,9 @@ On Windows you can also double-click `run_gui.bat` — it creates a virtual envi
 
 **GitHub Actions (recommended).** Push to `main` (or run *Build Windows EXE and Release* manually). The workflow builds the app with PyInstaller, creates the installer with Inno Setup and publishes both to a GitHub Release.
 
-**Locally on Windows.** Double-click `build_exe.bat` → `dist\SnapshotAll\SnapshotAll.exe`. To also create the installer, install [Inno Setup](https://jrsoftware.org/isinfo.php) and compile `installer.iss`.
+**Locally on Windows.** Double-click `build_exe.bat` → `dist\SnapshotAll\SnapshotAll.exe`. If [Inno Setup](https://jrsoftware.org/isinfo.php) is installed, it also creates `Output\SnapshotAll_Setup.exe`.
+
+**Version numbers.** The default version is `_DEFAULT_VERSION` in `snapshot_common.py` — change it there to start a new release line (e.g. `1.5.0`). At build time `tools/set_version.py` decides the final version and injects the *same* string into the app header and Settings → About, the file properties of the exe, the installer and the release name: tags `vX.Y.Z` are used exactly, builds from `main` are `MAJOR.MINOR.<build number>`, other branches `MAJOR.MINOR.0-dev.<build number>`.
 
 ## Project structure
 
@@ -176,7 +218,10 @@ SnapshotAll/
 ├── snapshot_gui.py        # desktop app: wizard UI (customtkinter)
 ├── snapshot_all.py        # CLI + website and Android engines
 ├── snapshot_desktop.py    # Windows app engine (UI Automation)
-├── snapshot_common.py     # shared helpers, app name / version / author / website
+├── snapshot_gif.py        # flows (link graph) and captioned slideshow GIFs
+├── snapshot_live.py       # live recording: replays a flow in a browser and records it
+├── snapshot_common.py     # shared helpers, app name / default version / author / website
+├── tools/set_version.py   # decides the build version and injects it everywhere
 ├── assets/                # logo and icons
 ├── docs/                  # README images
 ├── installer.iss          # Inno Setup installer script
@@ -191,6 +236,7 @@ SnapshotAll/
 
 - **Websites:** pages reachable only through button clicks or form submissions are not discovered; CAPTCHAs and bot protection may block the crawler.
 - **Android:** screens that need login or specific input can't be passed automatically — log in manually first, then run with the app's package name. Flutter apps, games and WebViews expose limited UI structure.
+- **GIF flows:** a flow follows links between pages, which is not always the path a visitor would take. Live recording needs a website source and a browser, and its files are larger (a few hundred KB to several MB per flow, depending on the pages and the quality).
 - **Windows apps:** relies on UI Automation, so custom-drawn interfaces (games, some Qt/Electron/canvas UIs) expose few controls. Launchers that start a second process may need **attach** mode instead. Windows only.
 - No code signing yet, so Windows SmartScreen may warn on first launch.
 

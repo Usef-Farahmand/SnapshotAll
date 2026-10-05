@@ -32,9 +32,11 @@ python snapshot_all.py https://example.com   # CLI
 - `snapshot_gui.py` — wizard-style desktop app (customtkinter)
 - `snapshot_all.py` — CLI plus website and Android engines
 - `snapshot_desktop.py` — Windows app engine
+- `snapshot_gif.py` — builds flows from the link graph and renders captioned slideshow GIFs
+- `snapshot_live.py` — live recording: replays a flow in a real browser and records it as a GIF
 - `snapshot_common.py` — shared helpers (stop flag, `emit`, slugify, app name/version/author)
 
-Every engine exposes `run_*(target, out_dir, args)`, checks `snapshot_common.STOP` so the GUI can stop it, and reports each new screenshot through `snapshot_common.emit(args, path, label)` — that is how the GUI shows live previews.
+Every engine exposes `run_*(target, out_dir, args)`, checks `snapshot_common.STOP` so the GUI can stop it, and reports each new screenshot through `snapshot_common.emit(args, path, label, parent, title, kind, links)` — that is how the GUI shows live previews and how GIF flows learn how each page was reached and which pages link to which.
 
 ## Guidelines
 
@@ -76,7 +78,9 @@ Browser tests for full-page capture live in `tests/` (`pip install playwright py
 3. Push and open a pull request against `main`; fill in the PR template.
 4. A maintainer will review it. Please respond to feedback — small follow-up commits are fine.
 
-Releases are built automatically by GitHub Actions when changes land on `main`.
+Pushes to `develop` and pull requests build the app too, but only as downloadable artifacts (Actions → the run → Artifacts). Releases are published automatically by GitHub Actions when changes land on `main` or a version tag is pushed.
+
+Don't write the version number anywhere else: it comes from `_DEFAULT_VERSION` in `snapshot_common.py` and is injected into the app, exe, installer and release by `tools/set_version.py` during the build.
 
 ## Questions?
 

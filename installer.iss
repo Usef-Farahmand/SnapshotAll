@@ -1,6 +1,13 @@
+; The version is passed in at build time:  ISCC /DMyAppVersion=1.4.37 installer.iss
+; (tools/set_version.py decides it, so the installer matches the app header and the release name).
+#ifndef MyAppVersion
+  #define MyAppVersion "0.0.0-unversioned"
+#endif
+
 [Setup]
 AppName=SnapshotAll
-AppVersion=1.2.2
+AppVersion={#MyAppVersion}
+AppVerName=SnapshotAll {#MyAppVersion}
 AppPublisher=Usef Farahmand
 AppPublisherURL=https://www.useffarahmand.com/
 AppSupportURL=https://github.com/Usef-Farahmand/SnapshotAll/issues

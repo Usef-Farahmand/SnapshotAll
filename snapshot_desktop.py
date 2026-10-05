@@ -155,7 +155,8 @@ def run_desktop(target, out: Path, a):
                 name = f"{shots:03d}_{slugify(label, 30)}.png"
                 shoot(win, name)
                 trail = " > ".join(p[2] for p in path) or "home"
-                emit(a, out / name, trail)
+                emit(a, out / name, trail, parent=(" > ".join(p[2] for p in path[:-1]) or "home") if path else None,
+                     title=label)
                 print(f"[{shots}] {trail}")
                 if len(path) < a.max_depth and (state["launched"] or not path):
                     for key, idx, lb, _c in cands[: a.max_clicks]:

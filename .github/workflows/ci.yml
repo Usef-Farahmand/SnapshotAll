@@ -3,7 +3,7 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, develop]
 
 jobs:
   check:
@@ -21,6 +21,10 @@ jobs:
           ruff check --select E9,F63,F7,F82 .
       - name: Smoke test CLI
         run: python snapshot_all.py --help
+      - name: Unit tests (GIF flows)
+        run: |
+          pip install pillow pytest
+          python -m pytest tests/test_flows.py tests/test_version.py -q
   browser-tests:
     runs-on: ubuntu-latest
     steps:
@@ -30,7 +34,7 @@ jobs:
           python-version: "3.11"
       - name: Install Playwright and Chromium
         run: |
-          pip install playwright pytest
+          pip install playwright pytest pillow
           playwright install --with-deps chromium
       - name: Run browser tests
         run: python -m pytest -q

@@ -2,9 +2,14 @@
 import re
 import threading
 from pathlib import Path
+from urllib.parse import urldefrag, urlparse
 
 APP_NAME = "SnapshotAll"
-APP_VERSION = "1.2.2"
+_DEFAULT_VERSION = "1.4.1"   # the one place to change it by hand; see tools/set_version.py
+try:                           # written at build time, so the app, installer and release all show the same version
+    from _build_version import APP_VERSION  # noqa: F401
+except ImportError:
+    APP_VERSION = _DEFAULT_VERSION
 APP_AUTHOR = "Usef Farahmand"
 APP_URL = "https://github.com/Usef-Farahmand"
 APP_WEBSITE = "https://www.useffarahmand.com/"
@@ -17,12 +22,44 @@ STOP = threading.Event()  # set by the GUI to stop a running job
 DEFAULT_AVOID = r"delete|remove|log ?out|sign ?out|uninstall|pay|buy|purchase|checkout|reset|erase|wipe"
 
 
-def emit(a, path, label=""):
-    """Tell the GUI (if any) that a new screenshot exists: a.on_item(path, label)."""
+def normalize(url):
+    """Drop #fragments, but keep SPA hash routes such as #/about or #!/about."""
+    base, frag = urldefrag(url)
+    if frag.startswith("/") or frag.startswith("!"):
+        return f"{base}#{frag}"
+    return base
+
+
+def site_key(netloc):
+    """Identity of a site for 'same site?' checks: lower-case, without www. or default ports."""
+    host = netloc.lower().rsplit("@", 1)[-1]
+    for default_port in (":80", ":443"):
+        if host.endswith(default_port):
+            host = host[: -len(default_port)]
+    return host[4:] if host.startswith("www.") else host
+
+
+def page_key(url):
+    """Identity of a page for de-duplication: ignores scheme, www., trailing slash and plain #fragments."""
+    u = urlparse(normalize(url))
+    return (site_key(u.netloc) + (u.path.rstrip("/") or "/")
+            + (f"?{u.query}" if u.query else "") + (f"#{u.fragment}" if u.fragment else ""))
+
+
+def emit(a, path, label="", parent=None, title="", kind="screen", links=None):
+    """Tell the GUI (if any) that a new screenshot exists.
+
+    label   unique name of the page / screen (URL for websites, tap trail for apps)
+    parent  label of the page / screen it was reached from (None for the start)
+    title   short human name: the text of the link / button that led here
+    kind    "screen" for a page or screen, "scroll" for an extra scrolled capture
+    links   websites only: [(url, text, zone), ...] every same-site link on the page;
+            zone is "nav" (menu / header / footer) or "content"
+    """
     cb = getattr(a, "on_item", None)
     if cb:
         try:
-            cb(Path(path), label)
+            cb(Path(path), label, parent, title, kind, links or [])
         except Exception:
             pass
 
