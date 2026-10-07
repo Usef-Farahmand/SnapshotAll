@@ -2,4 +2,4 @@ playwright>=1.44
 uiautomator2>=3.0
 customtkinter>=5.2
 pillow>=10.1
-pywinauto>=0.6.8; sys_platform == "win32"
+pywinauto>=0.6.9; sys_platform == "win32"
