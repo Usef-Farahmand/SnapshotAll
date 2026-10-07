@@ -73,19 +73,19 @@ jobs:
 
       # Every build (develop, pull requests, main, tags) keeps its output for two weeks:
       # Actions -> the run -> Artifacts.
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: SnapshotAll_Setup
           path: Output/SnapshotAll_Setup.exe
           retention-days: 14
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: SnapshotAll_Portable
           path: SnapshotAll_Portable.zip
           retention-days: 14
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: SHA256SUMS
           path: SHA256SUMS.txt
